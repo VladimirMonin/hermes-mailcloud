@@ -1,0 +1,164 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.local/hermes-mailcloud/schemas/result-envelope.schema.json",
+  "title": "Hermes MailCloud Result Envelope",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "ok",
+    "operation"
+  ],
+  "properties": {
+    "ok": {
+      "type": "boolean"
+    },
+    "operation": {
+      "type": "string",
+      "minLength": 1
+    },
+    "trace_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "profile": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "remote": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "result": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": true
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    },
+    "error": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "message"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "minLength": 1
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        },
+        "details": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true
+        },
+        "exit_code": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "ok": {
+            "const": true
+          }
+        },
+        "required": [
+          "ok"
+        ]
+      },
+      "then": {
+        "required": [
+          "result"
+        ],
+        "properties": {
+          "error": {
+            "type": [
+              "null"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "ok": {
+            "const": false
+          }
+        },
+        "required": [
+          "ok"
+        ]
+      },
+      "then": {
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "result": {
+            "type": [
+              "null",
+              "object"
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "examples": [
+    {
+      "ok": true,
+      "operation": "publish",
+      "trace_id": "2026-07-04T13-45-00Z-a1b2",
+      "profile": "default",
+      "remote": "mailru:",
+      "result": {
+        "remote_path": "/Hermes/public/report.pdf",
+        "public_url": "https://cloud.mail.ru/public/..."
+      },
+      "warnings": []
+    },
+    {
+      "ok": false,
+      "operation": "publish",
+      "error": {
+        "kind": "unsafe_public_path",
+        "message": "Publishing is allowed only inside /Hermes/public.",
+        "details": {
+          "remote_path": "/Personal/report.pdf"
+        },
+        "exit_code": 9
+      }
+    }
+  ]
+}

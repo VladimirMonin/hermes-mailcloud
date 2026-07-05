@@ -1,0 +1,136 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.local/hermes-mailcloud/schemas/batch-plan.schema.json",
+  "title": "Hermes MailCloud Batch Plan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "operations"
+  ],
+  "properties": {
+    "version": {
+      "type": "integer",
+      "const": 1
+    },
+    "description": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "defaults": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "public_root": {
+          "type": "string",
+          "default": "/Hermes/public"
+        },
+        "private_root": {
+          "type": "string",
+          "default": "/Hermes/private"
+        },
+        "overwrite": {
+          "type": "string",
+          "enum": [
+            "never",
+            "always",
+            "if-newer"
+          ],
+          "default": "never"
+        },
+        "record_link": {
+          "type": "boolean",
+          "default": true
+        },
+        "probe_url": {
+          "type": "boolean",
+          "default": true
+        }
+      }
+    },
+    "operations": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "op"
+        ],
+        "properties": {
+          "op": {
+            "type": "string",
+            "enum": [
+              "mkdir",
+              "upload",
+              "download",
+              "mv",
+              "cp",
+              "rm",
+              "publish",
+              "link",
+              "unlink",
+              "sync_push",
+              "sync_pull"
+            ]
+          },
+          "local_path": {
+            "type": "string"
+          },
+          "remote_path": {
+            "type": "string"
+          },
+          "src_remote_path": {
+            "type": "string"
+          },
+          "dst_remote_path": {
+            "type": "string"
+          },
+          "public_url": {
+            "type": "string"
+          },
+          "overwrite": {
+            "type": "string",
+            "enum": [
+              "never",
+              "always",
+              "if-newer"
+            ]
+          },
+          "yes": {
+            "type": "boolean"
+          },
+          "dry_run": {
+            "type": "boolean"
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      }
+    }
+  },
+  "examples": [
+    {
+      "version": 1,
+      "defaults": {
+        "public_root": "/Hermes/public",
+        "overwrite": "never"
+      },
+      "operations": [
+        {
+          "op": "mkdir",
+          "remote_path": "/Hermes/public/reports"
+        },
+        {
+          "op": "publish",
+          "local_path": "./report.pdf",
+          "remote_path": "/Hermes/public/reports/report.pdf"
+        }
+      ]
+    }
+  ]
+}
