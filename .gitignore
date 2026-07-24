@@ -11,7 +11,9 @@ build/
 .coverage
 htmlcov/
 
-# IDE
+# Agent and IDE control-plane metadata
+.hermes/
+.serena/
 .idea/
 .vscode/
 *.swp
@@ -22,5 +24,15 @@ Thumbs.db
 
 # Secrets / local state
 .env
+.env.*
+!.env.example
+rclone.conf
+.rclone/
 *.db
 links.jsonl
+
+# Generated local artifacts
+artifacts/probe-results/
+*.log
+.cache/
+.ruff_cache/
