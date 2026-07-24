@@ -243,8 +243,10 @@ feat(probes): add unlink capability probe
 #### Вызов
 
 ```bash
-uv run python scripts/probes/04_public_url_probe.py --public-url "https://cloud.mail.ru/public/..." --json
+uv run python scripts/probes/04_public_url_probe.py --json < /path/to/owner-private-public-url
 ```
+
+Raw public capability data is read only from owner-private stdin, never from argv.
 
 #### Проверяет
 

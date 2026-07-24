@@ -61,7 +61,7 @@ Probe-скрипты не должны хранить секреты в коде
 
 ```bash
 export HMC_REMOTE="mailru:"
-export HMC_TEST_ROOT="/TEST/<unique-run-id>"
+export HMC_TEST_ROOT="/TEST/hermes-mailcloud-<unique-run-id>"
 export HMC_LIVE="1"
 ```
 
@@ -69,11 +69,16 @@ export HMC_LIVE="1"
 |---|---|---|
 | `HMC_LIVE` | `1` | разрешает live-проверки |
 | `HMC_REMOTE` | `mailru:` | имя rclone remote |
-| `HMC_TEST_ROOT` | `/TEST/<unique-run-id>` | freshly generated test-only descendant |
+| `HMC_TEST_ROOT` | `/TEST/hermes-mailcloud-<unique-run-id>` | freshly generated test-only descendant |
 | `HMC_ARTIFACTS_DIR` | `artifacts/probe-results` | куда писать JSON-отчёты |
 
 > [!warning]
 > Пароль внешнего приложения не должен передаваться через аргументы probe-скрипта. Его должен хранить `rclone config` или защищённое окружение.
+
+`01`–`03` refuse to run unless `HMC_LIVE=1`. They accept only a normalized,
+generated direct child named `/TEST/hermes-mailcloud-<unique-run-id>` and first
+prove that it does not already exist. Every JSON report includes same-run
+cleanup accounting; cleanup never expands beyond that root.
 
 ## 5. Общий формат JSON-отчёта 📦
 
@@ -83,21 +88,26 @@ export HMC_LIVE="1"
 {
   "ok": true,
   "probe": "02_publish_probe",
-  "remote": "mailru:",
-  "root": "/TEST/<unique-run-id>",
   "started_at": "2026-07-04T13:00:00+05:00",
   "finished_at": "2026-07-04T13:00:07+05:00",
   "checks": {
+    "root_absent": true,
+    "mkdir": true,
     "upload": true,
     "link_create": true,
-    "public_url_shape": true,
-    "public_url_probe": true,
-    "cleanup": true
+    "public_url_probe": true
   },
   "result": {
-    "remote_path": "/TEST/<unique-run-id>/hmc-probe.txt",
-    "public_url_fingerprint": "sha256:..."
+    "remote": "mailru:",
+    "root": "/TEST/hermes-mailcloud-<unique-run-id>",
+    "public_url_fingerprint": "sha256:...",
+    "http_accessible": true
   },
+  "cleanup": {
+    "root": "/TEST/hermes-mailcloud-<unique-run-id>",
+    "complete": true
+  },
+  "artifact": {"requested": false, "written": false},
   "warnings": []
 }
 ```
@@ -181,7 +191,7 @@ scripts/probes/01_file_ops_probe.py
 Команда:
 
 ```bash
-uv run python scripts/probes/01_file_ops_probe.py --remote mailru: --root /TEST/<unique-run-id> --json
+HMC_LIVE=1 uv run python scripts/probes/01_file_ops_probe.py --remote mailru: --root /TEST/hermes-mailcloud-<unique-run-id> --json
 ```
 
 Цепочка:
@@ -201,19 +211,19 @@ mkdir root
 Команды rclone:
 
 ```bash
-rclone mkdir mailru:/TEST/<unique-run-id>
-rclone copyto ./hmc-probe.txt mailru:/TEST/<unique-run-id>/hmc-probe.txt
-rclone lsjson mailru:/TEST/<unique-run-id>
-rclone copyto mailru:/TEST/<unique-run-id>/hmc-probe.txt ./hmc-probe-downloaded.txt
-rclone moveto mailru:/TEST/<unique-run-id>/hmc-probe.txt mailru:/TEST/<unique-run-id>/hmc-probe-renamed.txt
-rclone deletefile mailru:/TEST/<unique-run-id>/hmc-probe-renamed.txt
+rclone mkdir mailru:/TEST/hermes-mailcloud-<unique-run-id>
+rclone copyto ./hmc-probe.txt mailru:/TEST/hermes-mailcloud-<unique-run-id>/hmc-probe.txt
+rclone lsjson mailru:/TEST/hermes-mailcloud-<unique-run-id>
+rclone copyto mailru:/TEST/hermes-mailcloud-<unique-run-id>/hmc-probe.txt ./hmc-probe-downloaded.txt
+rclone moveto mailru:/TEST/hermes-mailcloud-<unique-run-id>/hmc-probe.txt mailru:/TEST/hermes-mailcloud-<unique-run-id>/hmc-probe-renamed.txt
+rclone deletefile mailru:/TEST/hermes-mailcloud-<unique-run-id>/hmc-probe-renamed.txt
 ```
 
 Критерии успеха:
 
 | Операция | Критерий |
 |---|---|
-| `mkdir` | папка создана или уже существовала |
+| `mkdir` | a proved-absent generated root was created |
 | `upload` | файл появился в `lsjson` |
 | `download` | локальный файл совпал с исходным |
 | `moveto` | старый путь исчез, новый появился |
@@ -230,7 +240,7 @@ scripts/probes/02_publish_probe.py
 Команда:
 
 ```bash
-uv run python scripts/probes/02_publish_probe.py --remote mailru: --root /TEST/<unique-run-id> --json
+HMC_LIVE=1 uv run python scripts/probes/02_publish_probe.py --remote mailru: --root /TEST/hermes-mailcloud-<unique-run-id> --json
 ```
 
 Цепочка:
@@ -243,13 +253,14 @@ uv run python scripts/probes/02_publish_probe.py --remote mailru: --root /TEST/<
   → попробовать HEAD/GET
   → записать only public_url_fingerprint in any shared report
   → удалить remote-файл
+  → bounded GET must prove the created public capability is invalidated (404/410)
 ```
 
 Команды:
 
 ```bash
-rclone copyto ./hmc-public-probe.txt mailru:/TEST/<unique-run-id>/hmc-public-probe.txt
-rclone link mailru:/TEST/<unique-run-id>/hmc-public-probe.txt
+rclone copyto ./hmc-public-probe.txt mailru:/TEST/hermes-mailcloud-<unique-run-id>/hmc-public-probe.txt
+rclone link mailru:/TEST/hermes-mailcloud-<unique-run-id>/hmc-public-probe.txt
 ```
 
 Проверка формы ссылки:
@@ -281,7 +292,7 @@ scripts/probes/03_unlink_probe.py
 Команда:
 
 ```bash
-uv run python scripts/probes/03_unlink_probe.py --remote mailru: --root /TEST/<unique-run-id> --json
+HMC_LIVE=1 uv run python scripts/probes/03_unlink_probe.py --remote mailru: --root /TEST/hermes-mailcloud-<unique-run-id> --json
 ```
 
 Что проверяет:
@@ -297,7 +308,7 @@ uv run python scripts/probes/03_unlink_probe.py --remote mailru: --root /TEST/<u
 Команда:
 
 ```bash
-rclone link --unlink mailru:/TEST/<unique-run-id>/hmc-unlink-probe.txt
+rclone link --unlink mailru:/TEST/hermes-mailcloud-<unique-run-id>/hmc-unlink-probe.txt
 ```
 
 Возможные итоги:
@@ -323,10 +334,18 @@ scripts/probes/04_public_url_probe.py
 Команда:
 
 ```bash
-uv run python scripts/probes/04_public_url_probe.py "https://cloud.mail.ru/public/..." --json
+uv run python scripts/probes/04_public_url_probe.py --json < /path/to/owner-private-public-url
 ```
 
+The raw URL is consumed only from one owner-private stdin descriptor; it is not
+accepted as a CLI argument and is never copied to JSON output, an artifact, or a
+shell example. Reports contain a `sha256:` fingerprint instead.
+
 Проверки:
+
+Проверки выполняются только для `https://cloud.mail.ru/public/...`: redirect stays
+on the same allowlisted host (at most three hops), and GET reads no more than
+8 KiB before classifying the response.
 
 | Проверка | Зачем |
 |---|---|
@@ -355,7 +374,10 @@ uv run python scripts/probes/04_public_url_probe.py "https://cloud.mail.ru/publi
 
 ## 11. Артефакты probe-прогонов 🗂️
 
-Рекомендуемая структура:
+Every entry point emits one sanitized JSON object to stdout on success, failure,
+`--help`, and argument errors. To retain a local JSON artifact, set `HMC_ARTIFACTS_DIR` or pass
+`--artifacts-dir`; artifact writing is optional and the destination is ignored
+by Git. Recommended local structure:
 
 ```text
 artifacts/
@@ -379,6 +401,11 @@ raw public URLs are capability data: use a redacted fingerprint in reports
 ## 12. Очистка после проверок 🧽
 
 Каждый live-probe должен пытаться очистить свои файлы. Но очистка не должна скрывать ошибку основной операции.
+If a probe created a public capability, file deletion alone is not cleanup:
+the probe records only its fingerprint and marks cleanup complete only after a
+bounded post-delete request proves invalidation with HTTP `404` or `410`.
+An unavailable or still-reachable public capability leaves `complete=false` and
+its redacted fingerprint as residual cleanup evidence.
 
 ```json
 {
@@ -400,7 +427,7 @@ raw public URLs are capability data: use a redacted fingerprint in reports
   "probe": "01_file_ops_probe",
   "error": {
     "kind": "cleanup_failed",
-    "message": "Probe file may remain in the current /TEST/<unique-run-id> root"
+    "message": "Probe file may remain in the current /TEST/hermes-mailcloud-<unique-run-id> root"
   }
 }
 ```
@@ -411,8 +438,8 @@ raw public URLs are capability data: use a redacted fingerprint in reports
 
 ```bash
 uv run python scripts/probes/00_env_probe.py --remote mailru: --json
-uv run python scripts/probes/01_file_ops_probe.py --remote mailru: --root /TEST/<unique-run-id> --json
-uv run python scripts/probes/02_publish_probe.py --remote mailru: --root /TEST/<unique-run-id> --json
+HMC_LIVE=1 uv run python scripts/probes/01_file_ops_probe.py --remote mailru: --root /TEST/hermes-mailcloud-<unique-run-id> --json
+HMC_LIVE=1 uv run python scripts/probes/02_publish_probe.py --remote mailru: --root /TEST/hermes-mailcloud-<unique-run-id> --json
 ```
 
 `03_unlink_probe.py` не блокирует `publish`, но блокирует production-реализацию `unlink`.

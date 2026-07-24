@@ -56,7 +56,7 @@ uv run pytest -q -m "not live"
 Запуск live-тестов:
 
 ```bash
-HMC_LIVE=1 HMC_REMOTE=mailru: uv run pytest -q -m live
+HMC_LIVE=1 HMC_REMOTE=mailru: HMC_TEST_ROOT=/TEST/hermes-mailcloud-<unique-run-id> uv run pytest -q -m live
 ```
 
 Если `HMC_LIVE` не установлен, live-тесты должны пропускаться, а не падать.
@@ -221,7 +221,7 @@ Live-тесты должны использовать только test root:
 Запуск:
 
 ```bash
-HMC_LIVE=1 HMC_REMOTE=mailru: HMC_TEST_ROOT=/TEST/<unique-run-id> uv run pytest -q -m live
+HMC_LIVE=1 HMC_REMOTE=mailru: HMC_TEST_ROOT=/TEST/hermes-mailcloud-<unique-run-id> uv run pytest -q -m live
 ```
 
 Набор:

@@ -157,7 +157,7 @@ hermes-mailcloud --profile work --remote mailru-test: doctor --json
 | `HMC_CONFIG` | путь к config.toml |
 | `HMC_LINKS_JOURNAL` | путь к журналу ссылок |
 | `HMC_LIVE` | разрешить live-тесты |
-| `HMC_TEST_ROOT` | fresh `/TEST/<unique-run-id>/` root for an explicit live run |
+| `HMC_TEST_ROOT` | fresh `/TEST/hermes-mailcloud-<unique-run-id>` root for an explicit live run |
 | `HMC_RCLONE_PATH` | путь к бинарнику rclone |
 
 Пример:
@@ -242,7 +242,7 @@ Cookie: ***
 
 ```bash
 HMC_REMOTE=mailru:
-HMC_TEST_ROOT=/TEST/<unique-run-id>
+HMC_TEST_ROOT=/TEST/hermes-mailcloud-<unique-run-id>
 HMC_LIVE=0
 ```
 

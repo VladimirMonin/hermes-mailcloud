@@ -10,7 +10,7 @@
 - [`01-architecture.md`](01-architecture.md) — target architecture and boundaries.
 - [`02-command-contract.md`](02-command-contract.md) — proposed CLI contract.
 - [`03-development-plan.md`](03-development-plan.md) — implementation waves.
-- [`04-probe-plan.md`](04-probe-plan.md) — planned live capability probes.
+- [`04-probe-plan.md`](04-probe-plan.md) — implemented safe probe harness and planned live capability evidence.
 - [`05-safety-model.md`](05-safety-model.md) — safety model.
 - [`06-testing-strategy.md`](06-testing-strategy.md) — offline-first and opt-in live testing.
 - [`07-agent-integration.md`](07-agent-integration.md) — proposed agent-facing behavior.
