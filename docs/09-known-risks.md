@@ -1,6 +1,14 @@
 # 09. Known Risks: известные риски и ограничения ⚠️
 
 > [!important]
+> **Frozen v0.1 scope (2026-07-24):** `doctor`, `ls`, `stat`, `mkdir`,
+> `upload`, `download`, `mv`, `cp`, `rm`, `publish`, `link`, and `batch` are
+> required. `unlink` is conditional on live rclone unlink plus URL invalidation
+> evidence. `sync`, `resolve`, private API, expiration/password links and full
+> link audit are post-v0.1; `auth` is not a command. Any conflicting text below
+> is a risk/history note rather than an implementation promise.
+
+> [!important]
 > Этот документ фиксирует риски `hermes-mailcloud`, чтобы разработка не скатилась в “оно вроде работало вчера”. Некоторые функции Mail.ru Cloud официально существуют в интерфейсе, но не имеют публичного документированного API. Это нужно честно учитывать.
 
 ## 1. Текущий статус уверенности 🧭
@@ -37,7 +45,7 @@ direct download URL
 | Риск | Вероятность | Влияние | Приоритет | Митигировать как |
 |---|---:|---:|---:|---|
 | `rclone link` перестанет работать | низкая/средняя | высокое | P1 | live doctor + fallback research |
-| `unlink` не поддержан rclone backend | средняя | среднее | P1 | private API fallback после probe |
+| `unlink` не поддержан rclone backend | средняя | среднее | P1 | record unsupported; no v0.1 fallback |
 | public URL не direct download | высокая | среднее | P1 | отдельная команда `resolve` |
 | `--expire` не работает | высокая | низкое/среднее | P2 | не обещать в v0.1 |
 | пароль на папку не автоматизируется | средняя | низкое | P3 | отложить |
@@ -118,8 +126,9 @@ Mail.ru указывает лимит до 3000 ссылок на файлы. П
 Статус:
 
 ```text
-publish: P1 для v0.1
-unlink: P1 для v0.2, либо experimental в v0.1 после live-подтверждения
+publish: required v0.1 capability
+unlink: absent until a live rclone unlink plus public-URL invalidation proof;
+        otherwise explicitly unsupported, with no private-API fallback in v0.1
 ```
 
 ## 5. Риски private API 🧪
@@ -175,11 +184,11 @@ purge не публиковать как v0.1 command
 dry-run для sync обязателен перед выполнением
 ```
 
-## 8. Риски синхронизации 🔁
+## 8. Post-v0.1 risk: синхронизация 🔁
 
 `sync` может удалить файлы на стороне назначения, если включён delete-режим.
 
-Для v0.1:
+Post-v0.1 proposal:
 
 ```text
 sync push/pull можно реализовать без delete
@@ -239,7 +248,7 @@ Rclone документация для Mail.ru backend указывает огр
 | нет rclone | exit code 4 | установить rclone |
 | remote не настроен | exit code 5 | `rclone config` |
 | auth failed | exit code 6 | проверить app password |
-| network timeout | exit code 10 | retry/backoff |
+| network timeout | exit code 14 | retry only explicitly safe read-only work |
 | rate limit | exit code 10 | повторить позже |
 | corrupted stdout | parse error | включить `--debug` |
 
@@ -284,16 +293,18 @@ GUI/TUI
 ```text
 doctor
 ls
+stat
 mkdir
 upload
 download
 mv/cp/rm
 publish
 link
+batch
 JSON output
 safety policies
 fake tests
-live publish probe
+explicit read-only/live doctor split
 ```
 
 ## 15. Decision checkpoints 🚦
@@ -316,7 +327,7 @@ live publish probe
 
 ```text
 03_unlink_probe.py доказал поддержку rclone unlink
-или принято решение делать private API fallback
+or records `unsupported`; private API is not a v0.1 fallback
 ```
 
 Перед релизом v0.1:

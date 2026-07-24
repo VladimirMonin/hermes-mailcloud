@@ -1,5 +1,16 @@
 # 05. Safety Model: безопасная работа агента с Облаком Mail.ru 🔐
 
+<!-- hmc-json-example-default: result-envelope -->
+
+> [!important]
+> **Frozen v0.1 safety contract (2026-07-24):** `publish` and `link` accept
+> only normalized descendants of the fixed `/Hermes/public` root; v0.1 has no
+> `--allow-outside-public-root` or `--allow-dangerous-file` escape hatch.
+> `publish` and executing write-batch require `--yes`; dry-run is side-effect
+> free. All project-owned live tests mutate only `/TEST/<run-id>/` descendants,
+> while existing data outside `/TEST` is metadata/list-only. Older suggestions
+> below must be read as superseded design history.
+
 > [!important]
 > Этот документ фиксирует правила безопасности для `hermes-mailcloud`. Главный принцип: агент должен уметь работать автономно, но не должен случайно публиковать личные данные, удалять файлы или светить секреты в логах.
 
@@ -25,7 +36,7 @@
 | Приватность по умолчанию | `upload` никогда не создаёт public link |
 | Явная публикация | ссылка создаётся только через `publish` или `link` |
 | Зона публикации | по умолчанию только `/Hermes/public` |
-| Явное подтверждение | `rm`, `unlink`, `sync --delete` требуют `--yes` |
+| Явное подтверждение | `rm`, `publish` и write-batch требуют `--yes` |
 | Машинная предсказуемость | в `--json` режиме нет интерактива |
 | Минимум секретов | пароли и токены не пишутся в stdout/stderr/logs |
 | Проверяемость | все public links пишутся в локальный журнал |
@@ -48,7 +59,7 @@
 | `/Hermes/private` | рабочие приватные файлы | запрещена |
 | `/Hermes/public` | файлы для ссылок | разрешена |
 | `/Hermes/.tmp` | временные файлы | запрещена |
-| `/Hermes/.doctor` | диагностика | только probe-сценарии |
+| `/TEST/<unique-run-id>` | isolated live-test objects | never an existing-data root |
 | `/Hermes/archive` | ручной архив | запрещена по умолчанию |
 
 ## 4. Правила публикации 🔗
@@ -75,18 +86,16 @@ hermes-mailcloud publish ./report.pdf /Hermes/public/report.pdf --json --yes
   "operation": "publish",
   "error": {
     "kind": "unsafe_public_path",
-    "message": "Publishing is allowed only inside /Hermes/public by default."
+    "message": "Publishing is allowed only inside /Hermes/public by default.",
+    "exit_code": 9
   }
 }
 ```
 
-### 4.3. Обход защиты только вручную
+### 4.3. Нет escape hatch в v0.1
 
-```bash
-hermes-mailcloud publish ./report.pdf /Other/report.pdf --allow-outside-public-root --json --yes
-```
-
-Этот флаг нужен только для человека или доверенного сценария. Агенту его лучше не использовать без отдельной политики.
+`publish` and `link` reject every normalized path outside `/Hermes/public`.
+There is no v0.1 CLI or batch override for a human, agent, or profile.
 
 ## 5. Запрещённые к публикации файлы 🚫
 
@@ -117,18 +126,20 @@ id_ed25519
   "ok": false,
   "operation": "publish",
   "error": {
-    "kind": "dangerous_file_blocked",
+    "kind": "dangerous_file_pattern",
     "message": "This file name is blocked by publish safety policy.",
     "details": {
       "local_path": "./.env",
       "matched_rule": ".env"
-    }
+    },
+    "exit_code": 9
   }
 }
 ```
 
 > [!note]
-> Разблокировка опасных файлов возможна только отдельным флагом `--allow-dangerous-file`, но для агентского режима такой флаг должен считаться запрещённым.
+> v0.1 has no `--allow-dangerous-file` flag. A blocked dangerous filename stays
+> blocked and returns a typed policy error.
 
 ## 6. Удаление и разрушительные действия 🧨
 
@@ -136,8 +147,8 @@ id_ed25519
 |---|---|---|
 | `rm file` | удалить файл | `--yes` в JSON-режиме |
 | `rm folder` | удалить папку | `--recursive --yes` |
-| `sync --delete` | массовое удаление | `--delete --yes` |
-| `unlink` | закрыть публичный доступ | `--yes` |
+| `sync --delete` | post-v0.1 historical proposal | not a v0.1 command |
+| `unlink` | conditional capability | absent until unlink/invalidation proof |
 | `purge` | удалить папку целиком | не включать в v0.1 как публичную команду |
 
 Пример:
@@ -154,7 +165,8 @@ hermes-mailcloud rm /Hermes/private/old.txt --json
   "operation": "rm",
   "error": {
     "kind": "confirmation_required",
-    "message": "Destructive operation requires --yes in JSON mode."
+    "message": "Destructive operation requires --yes in JSON mode.",
+    "exit_code": 9
   }
 }
 ```
@@ -173,13 +185,15 @@ hermes-mailcloud publish ./report.pdf /Hermes/public/report.pdf --json --dry-run
 {
   "ok": true,
   "operation": "publish",
-  "dry_run": true,
-  "plan": [
-    {"step": "validate_local_file", "status": "planned"},
-    {"step": "validate_public_root", "status": "planned"},
-    {"step": "upload", "status": "planned"},
-    {"step": "create_public_link", "status": "planned"}
-  ]
+  "result": {
+    "dry_run": true,
+    "plan": [
+      {"step": "validate_local_file", "status": "planned"},
+      {"step": "validate_public_root", "status": "planned"},
+      {"step": "upload", "status": "planned"},
+      {"step": "create_public_link", "status": "planned"}
+    ]
+  }
 }
 ```
 
@@ -196,13 +210,12 @@ cookies
 Authorization headers
 ```
 
-Разрешено писать:
+Разрешено писать only after sanitization:
 
 ```text
 имя remote
 версию rclone
 remote path
-public_url тестовых ссылок
 обрезанный stderr без секретов
 ```
 
@@ -217,7 +230,8 @@ Cookie=session=abc123
 
 ## 9. Журнал публичных ссылок 🧾
 
-Каждая созданная ссылка должна писаться в локальный JSONL-журнал.
+Каждая созданная ссылка creates a minimal local JSONL journal record. The
+journal is owner-private capability data, not a cloud source of truth.
 
 Путь по умолчанию:
 
@@ -233,17 +247,16 @@ Windows-вариант:
 
 Формат строки:
 
+<!-- hmc-json-example: non-contract -->
 ```json
-{"ts":"2026-07-04T13:00:00+05:00","operation":"publish","remote_path":"/Hermes/public/report.pdf","public_url":"https://cloud.mail.ru/public/...","trace_id":"..."}
+{"ts":"2026-07-24T13:00:00Z","operation":"publish","remote_path":"/Hermes/public/report.pdf","public_url_fingerprint":"sha256:...","trace_id":"..."}
 ```
 
 Журнал нужен для:
 
 ```text
-links list
-links audit
-unlink по известным ссылкам
-ручной ревизии публикаций
+локальной ревизии опубликованных путей
+correlation with owner-private output
 ```
 
 ## 10. Batch safety 🤖
@@ -256,7 +269,7 @@ unlink по известным ссылкам
 batch --dry-run должен работать без --yes
 batch с пишущими операциями требует --yes
 batch не должен продолжать выполнение после critical error, если не указан --continue-on-error
-batch должен возвращать results[] по каждой операции
+batch должен возвращать `result.items` по каждой операции
 batch не должен скрывать partial failure
 ```
 
@@ -267,8 +280,9 @@ batch не должен скрывать partial failure
   "ok": false,
   "operation": "batch",
   "error": {
-    "kind": "batch_confirmation_required",
-    "message": "Batch contains write operations and requires --yes."
+    "kind": "confirmation_required",
+    "message": "Batch contains write operations and requires --yes.",
+    "exit_code": 9
   }
 }
 ```
@@ -296,7 +310,6 @@ publish вне /Hermes/public запрещён
 publish .env запрещён
 publish *.pem запрещён
 rm без --yes запрещён
-sync --delete без --yes запрещён
 batch write без --yes запрещён
 --json не задаёт интерактивных вопросов
 stdout не содержит token/password/cookie

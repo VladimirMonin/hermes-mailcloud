@@ -4,132 +4,55 @@
   "title": "Hermes MailCloud Batch Plan",
   "type": "object",
   "additionalProperties": false,
-  "required": [
-    "version",
-    "operations"
-  ],
+  "required": ["version", "operations"],
   "properties": {
-    "version": {
-      "type": "integer",
-      "const": 1
-    },
-    "description": {
-      "type": [
-        "string",
-        "null"
-      ]
-    },
+    "version": {"type": "integer", "const": 1},
+    "description": {"type": "string", "minLength": 1},
     "defaults": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "public_root": {
-          "type": "string",
-          "default": "/Hermes/public"
-        },
-        "private_root": {
-          "type": "string",
-          "default": "/Hermes/private"
-        },
-        "overwrite": {
-          "type": "string",
-          "enum": [
-            "never",
-            "always",
-            "if-newer"
-          ],
-          "default": "never"
-        },
-        "record_link": {
-          "type": "boolean",
-          "default": true
-        },
-        "probe_url": {
-          "type": "boolean",
-          "default": true
-        }
+        "overwrite": {"type": "string", "enum": ["never", "always", "if-newer"], "default": "never"},
+        "continue_on_error": {"type": "boolean", "default": false}
       }
     },
-    "operations": {
-      "type": "array",
-      "minItems": 1,
-      "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "op"
-        ],
-        "properties": {
-          "op": {
-            "type": "string",
-            "enum": [
-              "mkdir",
-              "upload",
-              "download",
-              "mv",
-              "cp",
-              "rm",
-              "publish",
-              "link",
-              "unlink",
-              "sync_push",
-              "sync_pull"
-            ]
-          },
-          "local_path": {
-            "type": "string"
-          },
-          "remote_path": {
-            "type": "string"
-          },
-          "src_remote_path": {
-            "type": "string"
-          },
-          "dst_remote_path": {
-            "type": "string"
-          },
-          "public_url": {
-            "type": "string"
-          },
-          "overwrite": {
-            "type": "string",
-            "enum": [
-              "never",
-              "always",
-              "if-newer"
-            ]
-          },
-          "yes": {
-            "type": "boolean"
-          },
-          "dry_run": {
-            "type": "boolean"
-          },
-          "metadata": {
-            "type": "object",
-            "additionalProperties": true
-          }
-        }
-      }
-    }
+    "operations": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/operation"}}
+  },
+  "$defs": {
+    "localPath": {"type": "string", "minLength": 1},
+    "remotePath": {"type": "string", "pattern": "^/", "minLength": 2},
+    "operation": {
+      "oneOf": [
+        {"$ref": "#/$defs/ls"},
+        {"$ref": "#/$defs/stat"},
+        {"$ref": "#/$defs/mkdir"},
+        {"$ref": "#/$defs/upload"},
+        {"$ref": "#/$defs/download"},
+        {"$ref": "#/$defs/mv"},
+        {"$ref": "#/$defs/cp"},
+        {"$ref": "#/$defs/rm"},
+        {"$ref": "#/$defs/publish"},
+        {"$ref": "#/$defs/link"}
+      ]
+    },
+    "ls": {"type": "object", "additionalProperties": false, "required": ["op", "remote_path"], "properties": {"op": {"const": "ls"}, "remote_path": {"$ref": "#/$defs/remotePath"}, "recursive": {"type": "boolean"}}},
+    "stat": {"type": "object", "additionalProperties": false, "required": ["op", "remote_path"], "properties": {"op": {"const": "stat"}, "remote_path": {"$ref": "#/$defs/remotePath"}}},
+    "mkdir": {"type": "object", "additionalProperties": false, "required": ["op", "remote_path"], "properties": {"op": {"const": "mkdir"}, "remote_path": {"$ref": "#/$defs/remotePath"}, "parents": {"type": "boolean"}, "exist_ok": {"type": "boolean"}}},
+    "upload": {"type": "object", "additionalProperties": false, "required": ["op", "local_path", "remote_path"], "properties": {"op": {"const": "upload"}, "local_path": {"$ref": "#/$defs/localPath"}, "remote_path": {"$ref": "#/$defs/remotePath"}, "overwrite": {"type": "string", "enum": ["never", "always", "if-newer"]}}},
+    "download": {"type": "object", "additionalProperties": false, "required": ["op", "remote_path", "local_path"], "properties": {"op": {"const": "download"}, "remote_path": {"$ref": "#/$defs/remotePath"}, "local_path": {"$ref": "#/$defs/localPath"}, "overwrite": {"type": "string", "enum": ["never", "always", "if-newer"]}}},
+    "mv": {"type": "object", "additionalProperties": false, "required": ["op", "src_remote_path", "dst_remote_path"], "properties": {"op": {"const": "mv"}, "src_remote_path": {"$ref": "#/$defs/remotePath"}, "dst_remote_path": {"$ref": "#/$defs/remotePath"}}},
+    "cp": {"type": "object", "additionalProperties": false, "required": ["op", "src_remote_path", "dst_remote_path"], "properties": {"op": {"const": "cp"}, "src_remote_path": {"$ref": "#/$defs/remotePath"}, "dst_remote_path": {"$ref": "#/$defs/remotePath"}}},
+    "rm": {"type": "object", "additionalProperties": false, "required": ["op", "remote_path"], "properties": {"op": {"const": "rm"}, "remote_path": {"$ref": "#/$defs/remotePath"}, "recursive": {"type": "boolean"}}},
+    "publish": {"type": "object", "additionalProperties": false, "required": ["op", "local_path", "remote_path"], "properties": {"op": {"const": "publish"}, "local_path": {"$ref": "#/$defs/localPath"}, "remote_path": {"$ref": "#/$defs/remotePath"}, "overwrite": {"type": "string", "enum": ["never", "always", "if-newer"]}}},
+    "link": {"type": "object", "additionalProperties": false, "required": ["op", "remote_path"], "properties": {"op": {"const": "link"}, "remote_path": {"$ref": "#/$defs/remotePath"}}}
   },
   "examples": [
     {
       "version": 1,
-      "defaults": {
-        "public_root": "/Hermes/public",
-        "overwrite": "never"
-      },
+      "defaults": {"overwrite": "never", "continue_on_error": false},
       "operations": [
-        {
-          "op": "mkdir",
-          "remote_path": "/Hermes/public/reports"
-        },
-        {
-          "op": "publish",
-          "local_path": "./report.pdf",
-          "remote_path": "/Hermes/public/reports/report.pdf"
-        }
+        {"op": "mkdir", "remote_path": "/Hermes/public/reports", "parents": true},
+        {"op": "publish", "local_path": "./report.pdf", "remote_path": "/Hermes/public/reports/report.pdf"}
       ]
     }
   ]

@@ -1,5 +1,15 @@
 # 08. Configuration and Secrets: конфигурация и секреты ⚙️
 
+<!-- hmc-json-example-default: non-contract -->
+
+> [!important]
+> **Frozen v0.1 configuration contract (2026-07-24):** `auth` is not a CLI
+> command; read-only `doctor` reports readiness without exposing credentials.
+> Live doctor/probes use a generated `/TEST/<run-id>/` descendant, never a
+> fixed user-facing cloud root. Public URLs and raw provider output are
+> owner-private capability data: local journal storage is allowed, but Git,
+> artifacts, logs, Kanban and chat use redaction/fingerprints only.
+
 > [!important]
 > `hermes-mailcloud` не должен хранить пароль Mail.ru в своём обычном конфиге. В v0.1 авторизация делегируется `rclone`, а наш конфиг хранит только профили, пути, политики и настройки поведения CLI.
 
@@ -76,7 +86,8 @@ rclone_path = "rclone"
 private_root = "/Hermes/private"
 public_root = "/Hermes/public"
 temp_root = "/Hermes/.tmp"
-doctor_root = "/Hermes/.doctor"
+# doctor --live receives a fresh /TEST/<unique-run-id>/ test root per run;
+# it is not a persistent configurable user-data root.
 
 links_journal = "~/.local/share/hermes-mailcloud/links.jsonl"
 
@@ -88,7 +99,7 @@ probe_public_url_after_publish = true
 
 # Runtime
 timeout_seconds = 120
-retries = 3
+retries = 0  # write operations are never retried automatically in v0.1
 ```
 
 ## 4. Профили 🧩
@@ -103,13 +114,13 @@ private_root = "/Hermes/private"
 
 [profiles.work]
 remote = "mailru-work:"
-public_root = "/HermesWork/public"
-private_root = "/HermesWork/private"
+public_root = "/Hermes/public"
+private_root = "/Hermes/private"
 
 [profiles.test]
 remote = "mailru-test:"
-public_root = "/HermesTest/public"
-private_root = "/HermesTest/private"
+public_root = "/Hermes/public"
+private_root = "/Hermes/private"
 ```
 
 Вызов:
@@ -146,8 +157,7 @@ hermes-mailcloud --profile work --remote mailru-test: doctor --json
 | `HMC_CONFIG` | путь к config.toml |
 | `HMC_LINKS_JOURNAL` | путь к журналу ссылок |
 | `HMC_LIVE` | разрешить live-тесты |
-| `HMC_PROBE_ROOT` | root для probe/doctor |
-| `HMC_PUBLIC_ROOT` | зона публикации |
+| `HMC_TEST_ROOT` | fresh `/TEST/<unique-run-id>/` root for an explicit live run |
 | `HMC_RCLONE_PATH` | путь к бинарнику rclone |
 
 Пример:
@@ -199,7 +209,7 @@ Windows:
 Формат:
 
 ```json
-{"ts":"2026-07-04T13:00:00+05:00","profile":"default","remote":"mailru:","operation":"publish","remote_path":"/Hermes/public/report.pdf","public_url":"https://cloud.mail.ru/public/...","trace_id":"..."}
+{"ts":"2026-07-24T13:00:00Z","profile":"default","remote":"mailru:","operation":"publish","remote_path":"/Hermes/public/report.pdf","public_url_fingerprint":"sha256:...","trace_id":"..."}
 ```
 
 Журнал не является источником истины Mail.ru. Это локальная история операций утилиты.
@@ -232,8 +242,7 @@ Cookie: ***
 
 ```bash
 HMC_REMOTE=mailru:
-HMC_PROBE_ROOT=/Hermes/.doctor
-HMC_PUBLIC_ROOT=/Hermes/public
+HMC_TEST_ROOT=/TEST/<unique-run-id>
 HMC_LIVE=0
 ```
 
@@ -269,19 +278,27 @@ HMC_LIVE=1 HMC_REMOTE=mailru: uv run pytest -q -m live
 
 ## 12. Doctor checks 🩺
 
-`doctor` должен показывать, какие конфиги реально используются.
+`doctor` reports readiness without exposing credential-bearing configuration
+details. Its frozen v0.1 JSON result is:
 
+<!-- hmc-json-example: doctor-report -->
 ```json
 {
   "ok": true,
   "operation": "doctor",
   "result": {
-    "profile": "default",
-    "remote": "mailru:",
-    "rclone_path": "rclone",
-    "config_path": "~/.config/hermes-mailcloud/config.toml",
-    "public_root": "/Hermes/public",
-    "private_root": "/Hermes/private"
+    "mode": "read_only",
+    "checks": {
+      "rclone_installed": true,
+      "rclone_version": "1.74.3",
+      "remote_configured": true,
+      "cloud_access": true
+    },
+    "capabilities": {
+      "file_ops": "unknown",
+      "public_link_create": "unknown",
+      "public_link_unlink": "unknown"
+    }
   }
 }
 ```
@@ -296,8 +313,9 @@ HMC_LIVE=1 HMC_REMOTE=mailru: uv run pytest -q -m live
 1. Отозвать пароль в настройках Mail.ru.
 2. Создать новый app password.
 3. Обновить rclone config.
-4. Запустить hermes-mailcloud doctor --json.
-5. Проверить publish/link на тестовом файле.
+4. Запустить read-only `hermes-mailcloud doctor --json`.
+5. If explicitly authorized, use a new `/TEST/<unique-run-id>/` descendant for
+   any live capability check; do not use existing cloud data.
 ```
 
 ## 14. Acceptance criteria ✅

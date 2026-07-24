@@ -55,3 +55,8 @@ testpaths = ["tests"]
 markers = [
     "live: tests that hit real Mail.ru Cloud via rclone (deselect with '-m \"not live\"')",
 ]
+
+[dependency-groups]
+dev = [
+    "jsonschema>=4.23,<5",
+]

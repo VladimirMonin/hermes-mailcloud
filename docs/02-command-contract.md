@@ -1,9 +1,23 @@
 # 02. Command Contract — Hermes MailCloud
 
+<!-- hmc-json-example-default: result-envelope -->
+
 > Статус: draft  
 > Дата: 2026-07-04  
 > Проект: `hermes-mailcloud`  
 > Назначение: зафиксировать команды, флаги, JSON-ответы и exit codes для агентской CLI-утилиты.
+
+> [!important]
+> **Frozen v0.1 contract (2026-07-24).** Required commands are `doctor`,
+> `ls`, `stat`, `mkdir`, `upload`, `download`, `mv`, `cp`, `rm`, `publish`,
+> `link`, and `batch`. `unlink` is conditional: it is not shipped until a
+> bounded live probe proves both `rclone link --unlink` and public-URL
+> invalidation. `sync`, `resolve`, direct-download resolution, private API,
+> link expiration/passwords, and full link audit are post-v0.1. `auth` is not
+> a command: read-only `doctor` reports credential readiness without exposing
+> credentials. This freeze takes precedence over older draft sections below.
+> It is a target contract only: the current source tree remains a Wave 0
+> skeleton until a later implementation stage proves each command.
 
 ---
 
@@ -52,7 +66,7 @@ hermes-mailcloud publish ./report.pdf /Hermes/public/report.pdf --json --yes
 | `--dry-run` | bool | false | показать план без выполнения |
 | `--yes` | bool | false | подтвердить опасную операцию |
 | `--timeout` | int | 60 | timeout в секундах |
-| `--retries` | int | 3 | количество повторов |
+| `--retries` | int | 0 | only safe read-only work retries automatically; writes do not in v0.1 |
 | `--no-color` | bool | false | отключить ANSI-цвета |
 
 ---
@@ -70,7 +84,7 @@ hermes-mailcloud publish ./report.pdf /Hermes/public/report.pdf --json --yes
   "remote": "mailru:",
   "result": {
     "remote_path": "/Hermes/public/report.pdf",
-    "public_url": "https://cloud.mail.ru/public/..."
+    "public_url_fingerprint": "sha256:example-public-link"
   },
   "warnings": []
 }
@@ -91,7 +105,8 @@ hermes-mailcloud publish ./report.pdf /Hermes/public/report.pdf --json --yes
     "details": {
       "remote_path": "/Personal/report.pdf",
       "public_root": "/Hermes/public"
-    }
+    },
+    "exit_code": 9
   }
 }
 ```
@@ -120,6 +135,38 @@ hermes-mailcloud publish ./report.pdf /Hermes/public/report.pdf --json --yes
 
 ---
 
+## 5.1 Frozen cross-command invariants
+
+`schemas/result-envelope.schema.json` is the normative envelope. Exactly one
+of `result` and `error` is present. A normal failure has `ok: false` and a
+typed `error` whose kind and exit code are an approved pair. Batch partial
+failure is the sole exception to the usual failure shape: it has `ok: false`,
+no top-level `error`, `result.status: "partial_failure"`, `result.items`, and
+process exit code `11`.
+
+Remote paths are absolute POSIX-style paths. Before policy or rclone receives a
+path, the CLI must reject an empty path, NUL, relative paths, and normalized
+traversal outside its intended root. User input never includes the rclone
+remote prefix; it is assembled separately. `publish` and `link` validate the
+normalized descendant relation to `/Hermes/public`, not a string prefix.
+
+Every write command and `batch` supports `--dry-run`: it validates static
+arguments and policy and returns a planned result without rclone calls,
+mutations, journal writes, or URL probes. `--dry-run` never substitutes for
+`--yes` during real execution. Automatic retries are limited to explicitly
+safe read-only work. v0.1 makes no automatic retry of a write: ambiguous
+side-effects must be surfaced as a typed result/error until a later,
+operation-specific idempotency decision is documented and tested.
+
+The local link journal is an owner-private capability store, not a cloud source
+of truth. It records minimal operation metadata under local permissions; it
+never stores raw provider stdout/stderr. A returned public URL may be retained
+only locally for the owner, while Git, schemas, test artifacts, logs, Kanban
+and chat use redacted placeholders or fingerprints. Redaction applies before
+any diagnostic, journal or JSON `details` field is emitted.
+
+---
+
 ## 6. Команда `doctor` 🩺
 
 Проверяет готовность окружения.
@@ -130,46 +177,43 @@ hermes-mailcloud publish ./report.pdf /Hermes/public/report.pdf --json --yes
 hermes-mailcloud doctor --json
 ```
 
-### Проверки
+### Режимы проверок
 
-```text
-rclone installed
-rclone version
-remote exists
-rclone about
-root ls
-doctor folder mkdir
-small upload
-small download
-public link create
-public URL probe
-unlink capability probe
-cleanup
-```
+`doctor --json` is read-only: it may report rclone availability/version,
+configured remote and read-only cloud access, but it never creates an object or
+calls link/unlink. `doctor --json --live` is the explicit mutating mode. Every
+live run must use a newly generated descendant of `/TEST/<unique-run-id>/`,
+record that normalized root, and clean up only objects created by that run.
+Existing objects outside `/TEST` remain metadata/list-only.
 
-### JSON успеха
+### JSON успеха: read-only mode
 
+<!-- hmc-json-example: doctor-report -->
 ```json
 {
   "ok": true,
   "operation": "doctor",
   "result": {
-    "rclone_installed": true,
-    "rclone_version": "1.74.3",
-    "remote_exists": true,
-    "cloud_access": true,
-    "upload": true,
-    "download": true,
-    "publish": true,
-    "public_url_probe": true,
-    "unlink_supported": false,
-    "cleanup": true
-  },
-  "warnings": [
-    "unlink is not confirmed for this backend; private-api fallback may be required"
-  ]
+    "mode": "read_only",
+    "checks": {
+      "rclone_installed": true,
+      "rclone_version": "1.74.3",
+      "remote_configured": true,
+      "cloud_access": true
+    },
+    "capabilities": {
+      "file_ops": "unknown",
+      "public_link_create": "unknown",
+      "public_link_unlink": "unknown"
+    }
+  }
 }
 ```
+
+Live mode adds only `/TEST`-scoped file-cycle, link, bounded URL and cleanup
+checks. `unlink` becomes `supported` only after the same live run proves URL
+invalidation; otherwise it is `unknown` or `unsupported` and remains absent
+from the CLI.
 
 ---
 
@@ -399,7 +443,8 @@ hermes-mailcloud rm /Hermes/private/old.txt --json --yes
   "operation": "rm",
   "error": {
     "kind": "confirmation_required",
-    "message": "rm requires --yes in non-interactive or JSON mode."
+    "message": "rm requires --yes in non-interactive or JSON mode.",
+    "exit_code": 9
   }
 }
 ```
@@ -433,13 +478,12 @@ return JSON
 
 | Флаг | Значения | Назначение |
 |---|---|---|
-| `--public-root` | path | разрешённая зона публикации |
-| `--allow-outside-public-root` | bool | отключить защиту |
 | `--overwrite` | `never`, `always`, `if-newer` | политика конфликта |
-| `--probe-url` | bool | проверить ссылку HTTP-запросом |
-| `--record-link` | bool | записать ссылку в журнал |
-| `--expire` | duration | best-effort, не гарантируется |
-| `--download-check` | `none`, `head`, `get-small` | проверка публичной ссылки |
+| `--probe-url` | bool | bounded URL probe; URL remains owner-private capability data |
+
+`publish` requires `--yes` unless it is `--dry-run`. Its normalized remote
+path must be a descendant of the fixed `/Hermes/public` root. v0.1 has no
+`--allow-outside-public-root` escape hatch and no expiration option.
 
 ### JSON успеха
 
@@ -450,7 +494,7 @@ return JSON
   "result": {
     "local_path": "./report.pdf",
     "remote_path": "/Hermes/public/report.pdf",
-    "public_url": "https://cloud.mail.ru/public/...",
+    "public_url_fingerprint": "sha256:example-public-link",
     "published": true,
     "backend": "rclone"
   },
@@ -474,10 +518,10 @@ hermes-mailcloud link /Hermes/public/report.pdf --json
 
 | Флаг | Назначение |
 |---|---|
-| `--public-root` | разрешённая зона |
-| `--allow-outside-public-root` | отключить safety gate |
-| `--record-link` | записать в журнал |
-| `--probe-url` | проверить доступность ссылки |
+| `--probe-url` | bounded URL probe; URL remains owner-private capability data |
+
+`link` accepts only a normalized descendant of `/Hermes/public`. It has no
+v0.1 public-root override.
 
 ### JSON успеха
 
@@ -487,7 +531,7 @@ hermes-mailcloud link /Hermes/public/report.pdf --json
   "operation": "link",
   "result": {
     "remote_path": "/Hermes/public/report.pdf",
-    "public_url": "https://cloud.mail.ru/public/...",
+    "public_url_fingerprint": "sha256:example-public-link",
     "backend": "rclone"
   }
 }
@@ -495,11 +539,15 @@ hermes-mailcloud link /Hermes/public/report.pdf --json
 
 ---
 
-## 17. Команда `unlink` 🔒
+## 17. Conditional capability: `unlink` (not a baseline v0.1 command) 🔒
 
-Закрывает публичный доступ.
+`unlink` is deliberately absent from the baseline CLI, batch schema and help.
+It may be added only after a bounded live run proves that `rclone link
+--unlink` invalidates the generated public URL. Failure, an unchanged URL, or
+an inconclusive probe means `unsupported`; it does not permit a private-API
+fallback in v0.1.
 
-### Вызов
+### Вызов после post-v0.1 capability gate
 
 ```bash
 hermes-mailcloud unlink "https://cloud.mail.ru/public/..." --json --yes
@@ -509,30 +557,21 @@ hermes-mailcloud unlink "https://cloud.mail.ru/public/..." --json --yes
 
 | Флаг | Значения | Назначение |
 |---|---|---|
-| `--backend` | `auto`, `rclone`, `private-api` | чем закрывать доступ |
+| `--backend` | `rclone` | only after its own successful invalidation proof |
 | `--yes` | bool | обязательное подтверждение |
 | `--probe-after` | bool | проверить, что ссылка закрылась |
 
-### Статус v0.1
+### Status
 
-`unlink` должен быть реализован только после live-probe. До подтверждения команда может возвращать:
-
-```json
-{
-  "ok": false,
-  "operation": "unlink",
-  "error": {
-    "kind": "backend_unsupported",
-    "message": "unlink is not confirmed for the current backend. Run doctor first."
-  }
-}
-```
+This illustrative invocation is not a v0.1 public contract. A missing proof
+means no command is shipped, rather than a command that guesses or falls back.
 
 ---
 
-## 18. Команда `resolve` 🧭
+## 18. Post-v0.1 proposal: `resolve` 🧭
 
-Проверяет публичную ссылку и пытается определить режим скачивания.
+Проверяет публичную ссылку и пытается определить режим скачивания. This is
+documentation of a later proposal, not a v0.1 command.
 
 ### Вызов
 
@@ -542,12 +581,13 @@ hermes-mailcloud resolve "https://cloud.mail.ru/public/..." --json
 
 ### JSON успеха
 
+<!-- hmc-json-example: non-contract -->
 ```json
 {
   "ok": true,
   "operation": "resolve",
   "result": {
-    "public_url": "https://cloud.mail.ru/public/...",
+    "public_url_fingerprint": "sha256:example-public-link",
     "http_accessible": true,
     "content_type": "text/html",
     "direct_download_url": null,
@@ -558,9 +598,10 @@ hermes-mailcloud resolve "https://cloud.mail.ru/public/..." --json
 
 ---
 
-## 19. Команда `sync` 🔄
+## 19. Post-v0.1 proposal: `sync` 🔄
 
-Синхронизирует локальную и удалённую директорию.
+Синхронизирует локальную и удалённую директорию. This is not a v0.1 command
+or batch operation.
 
 ### Вызов
 
@@ -594,12 +635,13 @@ hermes-mailcloud batch plan.json --json --yes
 
 ### Пример плана
 
+<!-- hmc-json-example: batch-plan -->
 ```json
 {
   "version": 1,
   "defaults": {
-    "public_root": "/Hermes/public",
-    "overwrite": "never"
+    "overwrite": "never",
+    "continue_on_error": false
   },
   "operations": [
     {
@@ -615,6 +657,13 @@ hermes-mailcloud batch plan.json --json --yes
 }
 ```
 
+`batch --dry-run` validates paths and policy without rclone calls, journal
+writes, URL probes or mutations; it does not need `--yes`. A batch with any
+write operation requires `--yes` when executed. All operation outputs live at
+`result.items`. A partial execution returns process exit `11` with `ok: false`,
+`result.status: "partial_failure"`, and no top-level `error`; each item has
+exactly one of its own `result` or `error`.
+
 ### JSON успеха
 
 ```json
@@ -622,20 +671,25 @@ hermes-mailcloud batch plan.json --json --yes
   "ok": true,
   "operation": "batch",
   "result": {
+    "status": "completed",
     "total": 2,
     "succeeded": 2,
     "failed": 0,
     "items": [
       {
+        "index": 0,
         "ok": true,
-        "op": "mkdir",
-        "remote_path": "/Hermes/public/reports"
+        "operation": "mkdir",
+        "result": {"remote_path": "/Hermes/public/reports"}
       },
       {
+        "index": 1,
         "ok": true,
-        "op": "publish",
-        "remote_path": "/Hermes/public/reports/report.pdf",
-        "public_url": "https://cloud.mail.ru/public/..."
+        "operation": "publish",
+        "result": {
+          "remote_path": "/Hermes/public/reports/report.pdf",
+          "public_url_fingerprint": "sha256:example-public-link"
+        }
       }
     ]
   }
@@ -661,9 +715,9 @@ dangerous_file_pattern
 confirmation_required
 backend_unsupported
 network_error
+retry_exhausted
 timeout
 parse_error
-partial_failure
 unknown_error
 ```
 
@@ -676,7 +730,7 @@ unknown_error
 ```text
 Всегда использовать --json.
 Перед batch write запускать --dry-run.
-Для rm/unlink/sync --delete использовать --yes только после проверки плана.
+Для publish и write-batch использовать --yes только после проверки плана.
 Не публиковать файлы вне /Hermes/public.
 Не передавать пароль через аргументы CLI.
 Не парсить human-output.

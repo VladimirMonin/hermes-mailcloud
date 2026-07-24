@@ -4,6 +4,10 @@
 > Дата: 2026-07-04  
 > Проект: `hermes-mailcloud`
 
+> Compatibility update (2026-07-24): ADR 0006 freezes v0.1 to the external
+> rclone backend. A missing rclone capability is recorded as unsupported, not
+> replaced by a private-API fallback in this release.
+
 
 ## Контекст
 
@@ -83,7 +87,7 @@ rclone/errors.py
 
 ```text
 v0.1: subprocess
-v0.2: private API fallback
+v0.2+: separately approved private-API research, never an automatic fallback
 v0.3: optional rclone RC
 v0.4: native backend only if justified
 ```

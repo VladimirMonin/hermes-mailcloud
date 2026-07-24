@@ -1,8 +1,14 @@
 # ADR 0002. JSON-first CLI contract
 
+<!-- hmc-json-example-default: result-envelope -->
+
 > Статус: accepted  
 > Дата: 2026-07-04  
 > Проект: `hermes-mailcloud`
+
+> Compatibility update (2026-07-24): ADR 0006 and
+> `schemas/result-envelope.schema.json` are the frozen v0.1 source for command
+> scope, error-kind/exit-code pairs and batch partial semantics.
 
 
 ## Контекст
@@ -54,7 +60,8 @@ command -> JSON envelope -> ok/result/error -> exit code
   "error": {
     "kind": "unsafe_public_path",
     "message": "Publishing is allowed only inside /Hermes/public.",
-    "details": {}
+    "details": {},
+    "exit_code": 9
   }
 }
 ```

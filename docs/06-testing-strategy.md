@@ -1,5 +1,15 @@
 # 06. Testing Strategy: стратегия тестирования hermes-mailcloud 🧪
 
+<!-- hmc-json-example-default: non-contract -->
+
+> [!important]
+> **Contract freeze (2026-07-24):** v0.1 schema/golden tests cover the required
+> command set, strict result/error exclusivity, batch `result.items` with exit
+> `11`, path/dry-run/retry/journal/redaction rules and read-only/live doctor
+> modes. Any live mutation is confined to a generated `/TEST/<run-id>/`
+> descendant; public URLs/raw provider output never leave owner-private local
+> evidence. Text below that names other commands is historical planning.
+
 > [!important]
 > `hermes-mailcloud` работает с реальным облаком, публичными ссылками и потенциально личными файлами. Поэтому основная стратегия: максимум тестов без live-доступа, а live-тесты — только явно включённые и изолированные.
 
@@ -24,7 +34,7 @@ live-сценарии подтверждены отдельными gated-тес
 | Fake integration | CLI + fake rclone runner | нет | да |
 | Golden JSON | стабильность JSON-контракта | нет | да |
 | Probe scripts | проверка окружения и возможностей | да | вручную |
-| Live tests | реальный Mail.ru Cloud | да | только opt-in |
+| Live tests | real Mail.ru Cloud only under a fresh `/TEST/<run-id>/` descendant | да | только opt-in |
 | Manual smoke | проверка перед релизом | да | вручную |
 
 ## 3. Маркеры pytest 🏷️
@@ -191,8 +201,11 @@ https://cloud.mail.ru/public/...
 ```json
 {
   "ok": false,
+  "operation": "link",
   "error": {
-    "kind": "public_url_parse_failed"
+    "kind": "parse_error",
+    "message": "rclone link output did not contain a supported public-link shape",
+    "exit_code": 13
   }
 }
 ```
@@ -202,13 +215,13 @@ https://cloud.mail.ru/public/...
 Live-тесты должны использовать только test root:
 
 ```text
-/Hermes/.doctor
+/TEST/<unique-run-id>
 ```
 
 Запуск:
 
 ```bash
-HMC_LIVE=1 HMC_REMOTE=mailru: HMC_PROBE_ROOT=/Hermes/.doctor uv run pytest -q -m live
+HMC_LIVE=1 HMC_REMOTE=mailru: HMC_TEST_ROOT=/TEST/<unique-run-id> uv run pytest -q -m live
 ```
 
 Набор:
@@ -289,23 +302,28 @@ test_sanitize_password
 неизвестная op падает
 write batch без --yes падает
 batch --dry-run не вызывает runner
-partial failure возвращает results[]
+partial failure returns `result.items` with process exit 11
 continue-on-error продолжает выполнение
 ```
 
 Пример partial failure:
 
+<!-- hmc-json-example: result-envelope -->
 ```json
 {
   "ok": false,
   "operation": "batch",
-  "error": {
-    "kind": "partial_failure"
-  },
-  "results": [
-    {"ok": true, "op": "mkdir"},
-    {"ok": false, "op": "publish", "error": {"kind": "public_link_failed"}}
-  ]
+  "result": {
+    "status": "partial_failure",
+    "exit_code": 11,
+    "total": 2,
+    "succeeded": 1,
+    "failed": 1,
+    "items": [
+      {"index": 0, "operation": "mkdir", "ok": true, "result": {}},
+      {"index": 1, "operation": "publish", "ok": false, "error": {"kind": "network_error", "message": "link failed", "exit_code": 10}}
+    ]
+  }
 }
 ```
 

@@ -4,148 +4,157 @@
   "title": "Hermes MailCloud Result Envelope",
   "type": "object",
   "additionalProperties": false,
-  "required": [
-    "ok",
-    "operation"
-  ],
+  "required": ["ok", "operation"],
   "properties": {
-    "ok": {
-      "type": "boolean"
-    },
-    "operation": {
-      "type": "string",
-      "minLength": 1
-    },
-    "trace_id": {
-      "type": [
-        "string",
-        "null"
-      ]
-    },
-    "profile": {
-      "type": [
-        "string",
-        "null"
-      ]
-    },
-    "remote": {
-      "type": [
-        "string",
-        "null"
-      ]
-    },
-    "result": {
-      "type": [
-        "object",
-        "null"
-      ],
-      "additionalProperties": true
-    },
-    "warnings": {
-      "type": "array",
-      "items": {
-        "type": "string"
+    "ok": {"type": "boolean"},
+    "operation": {"type": "string", "minLength": 1},
+    "trace_id": {"type": ["string", "null"]},
+    "profile": {"type": ["string", "null"]},
+    "remote": {"type": ["string", "null"]},
+    "result": {"type": "object", "additionalProperties": true},
+    "warnings": {"type": "array", "items": {"type": "string"}, "default": []},
+    "error": {"$ref": "#/$defs/error"}
+  },
+  "oneOf": [
+    {
+      "properties": {
+        "ok": {"const": true},
+        "operation": {"not": {"const": "batch"}}
       },
-      "default": []
+      "required": ["ok", "result"],
+      "not": {"required": ["error"]}
     },
+    {
+      "properties": {"ok": {"const": false}},
+      "required": ["ok", "error"],
+      "not": {"required": ["result"]}
+    },
+    {
+      "properties": {
+        "ok": {"const": false},
+        "operation": {"const": "batch"},
+        "result": {"$ref": "#/$defs/batchPartialResult"}
+      },
+      "required": ["ok", "operation", "result"],
+      "not": {"required": ["error"]}
+    },
+    {
+      "properties": {
+        "ok": {"const": true},
+        "operation": {"const": "batch"},
+        "result": {"$ref": "#/$defs/batchCompletedResult"}
+      },
+      "required": ["ok", "operation", "result"],
+      "not": {"required": ["error"]}
+    }
+  ],
+  "$defs": {
     "error": {
-      "type": [
-        "object",
-        "null"
-      ],
+      "type": "object",
       "additionalProperties": false,
-      "required": [
-        "kind",
-        "message"
-      ],
+      "required": ["kind", "message", "exit_code"],
       "properties": {
         "kind": {
           "type": "string",
-          "minLength": 1
+          "enum": [
+            "unknown_error",
+            "invalid_arguments",
+            "config_error",
+            "rclone_not_found",
+            "remote_not_configured",
+            "access_denied",
+            "not_found",
+            "conflict",
+            "unsafe_public_path",
+            "dangerous_file_pattern",
+            "confirmation_required",
+            "network_error",
+            "retry_exhausted",
+            "backend_unsupported",
+            "parse_error",
+            "timeout"
+          ]
         },
-        "message": {
-          "type": "string",
-          "minLength": 1
-        },
-        "details": {
-          "type": [
-            "object",
-            "null"
-          ],
-          "additionalProperties": true
-        },
-        "exit_code": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "minimum": 0
-        }
-      }
-    }
-  },
-  "allOf": [
-    {
-      "if": {
-        "properties": {
-          "ok": {
-            "const": true
-          }
-        },
-        "required": [
-          "ok"
-        ]
+        "message": {"type": "string", "minLength": 1},
+        "details": {"type": "object", "additionalProperties": true},
+        "exit_code": {"type": "integer", "minimum": 1, "maximum": 14}
       },
-      "then": {
-        "required": [
-          "result"
-        ],
-        "properties": {
-          "error": {
-            "type": [
-              "null"
-            ]
-          }
-        }
+      "oneOf": [
+        {"properties": {"kind": {"const": "unknown_error"}, "exit_code": {"const": 1}}},
+        {"properties": {"kind": {"const": "invalid_arguments"}, "exit_code": {"const": 2}}},
+        {"properties": {"kind": {"const": "config_error"}, "exit_code": {"const": 3}}},
+        {"properties": {"kind": {"const": "rclone_not_found"}, "exit_code": {"const": 4}}},
+        {"properties": {"kind": {"const": "remote_not_configured"}, "exit_code": {"const": 5}}},
+        {"properties": {"kind": {"const": "access_denied"}, "exit_code": {"const": 6}}},
+        {"properties": {"kind": {"const": "not_found"}, "exit_code": {"const": 7}}},
+        {"properties": {"kind": {"const": "conflict"}, "exit_code": {"const": 8}}},
+        {"properties": {"kind": {"enum": ["unsafe_public_path", "dangerous_file_pattern", "confirmation_required"]}, "exit_code": {"const": 9}}},
+        {"properties": {"kind": {"enum": ["network_error", "retry_exhausted"]}, "exit_code": {"const": 10}}},
+        {"properties": {"kind": {"const": "backend_unsupported"}, "exit_code": {"const": 12}}},
+        {"properties": {"kind": {"const": "parse_error"}, "exit_code": {"const": 13}}},
+        {"properties": {"kind": {"const": "timeout"}, "exit_code": {"const": 14}}}
+      ]
+    },
+    "batchPartialResult": {
+      "$comment": "Runtime validation must ensure total equals len(items), succeeded plus failed equals total, outcome counts match items, and indices are contiguous from zero.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "exit_code", "total", "succeeded", "failed", "items"],
+      "properties": {
+        "status": {"const": "partial_failure"},
+        "exit_code": {"const": 11},
+        "total": {"type": "integer", "minimum": 1},
+        "succeeded": {"type": "integer", "minimum": 0},
+        "failed": {"type": "integer", "minimum": 1},
+        "items": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/batchItem"}}
       }
     },
-    {
-      "if": {
-        "properties": {
-          "ok": {
-            "const": false
-          }
-        },
-        "required": [
-          "ok"
-        ]
-      },
-      "then": {
-        "required": [
-          "error"
-        ],
-        "properties": {
-          "result": {
-            "type": [
-              "null",
-              "object"
-            ]
-          }
-        }
+    "batchCompletedResult": {
+      "$comment": "Runtime validation must ensure total equals len(items), succeeded plus failed equals total, outcome counts match items, and indices are contiguous from zero.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "total", "succeeded", "failed", "items"],
+      "properties": {
+        "status": {"const": "completed"},
+        "total": {"type": "integer", "minimum": 1},
+        "succeeded": {"type": "integer", "minimum": 1},
+        "failed": {"const": 0},
+        "items": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/batchItem"}}
       }
+    },
+    "batchItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["index", "operation", "ok"],
+      "properties": {
+        "index": {"type": "integer", "minimum": 0},
+        "operation": {"type": "string", "minLength": 1},
+        "ok": {"type": "boolean"},
+        "result": {"type": "object", "additionalProperties": true},
+        "error": {"$ref": "#/$defs/error"}
+      },
+      "oneOf": [
+        {
+          "properties": {"ok": {"const": true}},
+          "required": ["result"],
+          "not": {"required": ["error"]}
+        },
+        {
+          "properties": {"ok": {"const": false}},
+          "required": ["error"],
+          "not": {"required": ["result"]}
+        }
+      ]
     }
-  ],
+  },
   "examples": [
     {
       "ok": true,
       "operation": "publish",
-      "trace_id": "2026-07-04T13-45-00Z-a1b2",
+      "trace_id": "2026-07-24T13-45-00Z-a1b2",
       "profile": "default",
       "remote": "mailru:",
-      "result": {
-        "remote_path": "/Hermes/public/report.pdf",
-        "public_url": "https://cloud.mail.ru/public/..."
-      },
+      "result": {"remote_path": "/Hermes/public/report.pdf", "public_url_fingerprint": "sha256:example-public-link"},
       "warnings": []
     },
     {
@@ -154,10 +163,23 @@
       "error": {
         "kind": "unsafe_public_path",
         "message": "Publishing is allowed only inside /Hermes/public.",
-        "details": {
-          "remote_path": "/Personal/report.pdf"
-        },
+        "details": {"remote_path": "/Personal/report.pdf"},
         "exit_code": 9
+      }
+    },
+    {
+      "ok": false,
+      "operation": "batch",
+      "result": {
+        "status": "partial_failure",
+        "exit_code": 11,
+        "total": 2,
+        "succeeded": 1,
+        "failed": 1,
+        "items": [
+          {"index": 0, "operation": "mkdir", "ok": true, "result": {"remote_path": "/Hermes/public/reports"}},
+          {"index": 1, "operation": "publish", "ok": false, "error": {"kind": "network_error", "message": "provider unavailable", "exit_code": 10}}
+        ]
       }
     }
   ]

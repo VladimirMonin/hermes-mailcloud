@@ -1,5 +1,15 @@
 # 04. Probe Plan: проверка Mail.ru Cloud перед разработкой 🧪
 
+<!-- hmc-json-example-default: non-contract -->
+
+> [!important]
+> **Contract freeze (2026-07-24):** probes establish capability evidence, not
+> public CLI scope. v0.1 `unlink` requires a successful rclone unlink and
+> public-URL invalidation proof; `sync`, `resolve`, private API, expiration and
+> link audit remain post-v0.1. All project-owned live mutations use a unique
+> `/TEST/<run-id>/` descendant; public URLs and raw probe output are private
+> capability data and never committed or copied into Kanban/chat.
+
 > [!important]
 > Этот документ описывает не production-код, а разведочные проверки. Его задача — доказать, что реальные операции Mail.ru Cloud работают на конкретном аккаунте, конкретной машине и конкретной версии `rclone`, прежде чем писать полноценный CLI.
 
@@ -51,7 +61,7 @@ Probe-скрипты не должны хранить секреты в коде
 
 ```bash
 export HMC_REMOTE="mailru:"
-export HMC_PROBE_ROOT="/Hermes/.doctor"
+export HMC_TEST_ROOT="/TEST/<unique-run-id>"
 export HMC_LIVE="1"
 ```
 
@@ -59,9 +69,8 @@ export HMC_LIVE="1"
 |---|---|---|
 | `HMC_LIVE` | `1` | разрешает live-проверки |
 | `HMC_REMOTE` | `mailru:` | имя rclone remote |
-| `HMC_PROBE_ROOT` | `/Hermes/.doctor` | папка для тестовых файлов |
+| `HMC_TEST_ROOT` | `/TEST/<unique-run-id>` | freshly generated test-only descendant |
 | `HMC_ARTIFACTS_DIR` | `artifacts/probe-results` | куда писать JSON-отчёты |
-| `HMC_PUBLIC_ROOT` | `/Hermes/public` | зона публикации |
 
 > [!warning]
 > Пароль внешнего приложения не должен передаваться через аргументы probe-скрипта. Его должен хранить `rclone config` или защищённое окружение.
@@ -75,7 +84,7 @@ export HMC_LIVE="1"
   "ok": true,
   "probe": "02_publish_probe",
   "remote": "mailru:",
-  "root": "/Hermes/.doctor",
+  "root": "/TEST/<unique-run-id>",
   "started_at": "2026-07-04T13:00:00+05:00",
   "finished_at": "2026-07-04T13:00:07+05:00",
   "checks": {
@@ -86,8 +95,8 @@ export HMC_LIVE="1"
     "cleanup": true
   },
   "result": {
-    "remote_path": "/Hermes/.doctor/hmc-probe.txt",
-    "public_url": "https://cloud.mail.ru/public/..."
+    "remote_path": "/TEST/<unique-run-id>/hmc-probe.txt",
+    "public_url_fingerprint": "sha256:..."
   },
   "warnings": []
 }
@@ -172,7 +181,7 @@ scripts/probes/01_file_ops_probe.py
 Команда:
 
 ```bash
-uv run python scripts/probes/01_file_ops_probe.py --remote mailru: --root /Hermes/.doctor --json
+uv run python scripts/probes/01_file_ops_probe.py --remote mailru: --root /TEST/<unique-run-id> --json
 ```
 
 Цепочка:
@@ -192,12 +201,12 @@ mkdir root
 Команды rclone:
 
 ```bash
-rclone mkdir mailru:/Hermes/.doctor
-rclone copyto ./hmc-probe.txt mailru:/Hermes/.doctor/hmc-probe.txt
-rclone lsjson mailru:/Hermes/.doctor
-rclone copyto mailru:/Hermes/.doctor/hmc-probe.txt ./hmc-probe-downloaded.txt
-rclone moveto mailru:/Hermes/.doctor/hmc-probe.txt mailru:/Hermes/.doctor/hmc-probe-renamed.txt
-rclone deletefile mailru:/Hermes/.doctor/hmc-probe-renamed.txt
+rclone mkdir mailru:/TEST/<unique-run-id>
+rclone copyto ./hmc-probe.txt mailru:/TEST/<unique-run-id>/hmc-probe.txt
+rclone lsjson mailru:/TEST/<unique-run-id>
+rclone copyto mailru:/TEST/<unique-run-id>/hmc-probe.txt ./hmc-probe-downloaded.txt
+rclone moveto mailru:/TEST/<unique-run-id>/hmc-probe.txt mailru:/TEST/<unique-run-id>/hmc-probe-renamed.txt
+rclone deletefile mailru:/TEST/<unique-run-id>/hmc-probe-renamed.txt
 ```
 
 Критерии успеха:
@@ -221,7 +230,7 @@ scripts/probes/02_publish_probe.py
 Команда:
 
 ```bash
-uv run python scripts/probes/02_publish_probe.py --remote mailru: --root /Hermes/.doctor --json
+uv run python scripts/probes/02_publish_probe.py --remote mailru: --root /TEST/<unique-run-id> --json
 ```
 
 Цепочка:
@@ -232,15 +241,15 @@ uv run python scripts/probes/02_publish_probe.py --remote mailru: --root /Hermes
   → rclone link
   → проверить форму ссылки
   → попробовать HEAD/GET
-  → записать public_url в отчёт
+  → записать only public_url_fingerprint in any shared report
   → удалить remote-файл
 ```
 
 Команды:
 
 ```bash
-rclone copyto ./hmc-public-probe.txt mailru:/Hermes/.doctor/hmc-public-probe.txt
-rclone link mailru:/Hermes/.doctor/hmc-public-probe.txt
+rclone copyto ./hmc-public-probe.txt mailru:/TEST/<unique-run-id>/hmc-public-probe.txt
+rclone link mailru:/TEST/<unique-run-id>/hmc-public-probe.txt
 ```
 
 Проверка формы ссылки:
@@ -272,7 +281,7 @@ scripts/probes/03_unlink_probe.py
 Команда:
 
 ```bash
-uv run python scripts/probes/03_unlink_probe.py --remote mailru: --root /Hermes/.doctor --json
+uv run python scripts/probes/03_unlink_probe.py --remote mailru: --root /TEST/<unique-run-id> --json
 ```
 
 Что проверяет:
@@ -288,7 +297,7 @@ uv run python scripts/probes/03_unlink_probe.py --remote mailru: --root /Hermes/
 Команда:
 
 ```bash
-rclone link --unlink mailru:/Hermes/.doctor/hmc-unlink-probe.txt
+rclone link --unlink mailru:/TEST/<unique-run-id>/hmc-unlink-probe.txt
 ```
 
 Возможные итоги:
@@ -296,7 +305,7 @@ rclone link --unlink mailru:/Hermes/.doctor/hmc-unlink-probe.txt
 | Итог | Значение для разработки |
 |---|---|
 | `unlink_supported=true` | можно использовать rclone для `unlink` |
-| `unlink_supported=false` | нужен private API fallback |
+| `unlink_supported=false` | record unsupported; no v0.1 private-API fallback |
 | команда успешна, но ссылка жива | считать `unlink` неподдержанным |
 | команда падает | считать неподдержанным |
 
@@ -334,7 +343,7 @@ uv run python scripts/probes/04_public_url_probe.py "https://cloud.mail.ru/publi
   "ok": true,
   "probe": "04_public_url_probe",
   "result": {
-    "public_url": "https://cloud.mail.ru/public/...",
+    "public_url_fingerprint": "sha256:example-public-link",
     "http_accessible": true,
     "status_code": 200,
     "content_type": "text/html",
@@ -364,7 +373,7 @@ artifacts/
 не писать app password
 не писать access_token
 stdout/stderr обрезать до безопасного tail
-public_url можно писать, но лучше помечать как test artifact
+raw public URLs are capability data: use a redacted fingerprint in reports
 ```
 
 ## 12. Очистка после проверок 🧽
@@ -391,7 +400,7 @@ public_url можно писать, но лучше помечать как test
   "probe": "01_file_ops_probe",
   "error": {
     "kind": "cleanup_failed",
-    "message": "Probe file may remain in /Hermes/.doctor"
+    "message": "Probe file may remain in the current /TEST/<unique-run-id> root"
   }
 }
 ```
@@ -402,8 +411,8 @@ public_url можно писать, но лучше помечать как test
 
 ```bash
 uv run python scripts/probes/00_env_probe.py --remote mailru: --json
-uv run python scripts/probes/01_file_ops_probe.py --remote mailru: --root /Hermes/.doctor --json
-uv run python scripts/probes/02_publish_probe.py --remote mailru: --root /Hermes/.doctor --json
+uv run python scripts/probes/01_file_ops_probe.py --remote mailru: --root /TEST/<unique-run-id> --json
+uv run python scripts/probes/02_publish_probe.py --remote mailru: --root /TEST/<unique-run-id> --json
 ```
 
 `03_unlink_probe.py` не блокирует `publish`, но блокирует production-реализацию `unlink`.

@@ -1,5 +1,15 @@
 # 01. Architecture — Hermes MailCloud
 
+<!-- hmc-json-example-default: non-contract -->
+
+> [!important]
+> **Contract freeze (2026-07-24):** the v0.1 public command set is `doctor`,
+> `ls`, `stat`, `mkdir`, `upload`, `download`, `mv`, `cp`, `rm`, `publish`,
+> `link`, and `batch`. `unlink` needs a bounded live invalidation proof;
+> `sync`, `resolve`, private API, expire/password links and full link audit are
+> post-v0.1. `auth` remains configuration readiness, not a command. Older
+> architecture options below are proposals, not current CLI behavior.
+
 > Статус: draft  
 > Дата: 2026-07-04  
 > Проект: `hermes-mailcloud`  
@@ -41,7 +51,7 @@ flowchart LR
     C --> D[Policy Layer]
     D --> E[Backend Layer]
     E --> F[Rclone Subprocess]
-    E --> G[Private API Optional]
+    E --> G[Private API post-v0.1]
     E --> H[WebDAV Optional]
     F --> I[Mail.ru Cloud]
     G --> I
@@ -112,7 +122,6 @@ Rich только для human-output, не для JSON
 Команды проекта:
 
 ```text
-auth
 doctor
 ls
 stat
@@ -122,13 +131,14 @@ download
 mv
 cp
 rm
-sync
 publish
 link
-unlink
-resolve
 batch
 ```
+
+`auth` is configuration readiness handled by `doctor`, not a command. `unlink`
+is conditional on live unlink-plus-invalidation evidence. `sync` and `resolve`
+are post-v0.1 proposals, not command-layer members for this release.
 
 Command Layer не должен знать детали rclone. Он должен вызывать абстрактный backend.
 
@@ -143,8 +153,7 @@ Command Layer не должен знать детали rclone. Он долже�
 ```text
 publish только внутри /Hermes/public
 rm требует --yes
-sync --delete требует --yes
-batch write operations требуют --yes
+publish и batch write operations требуют --yes
 опасные файлы нельзя публиковать
 секреты не попадают в stdout/stderr/logs
 ```
@@ -217,7 +226,7 @@ Runner не должен напрямую печатать в консоль.
   "operation": "publish",
   "result": {
     "remote_path": "/Hermes/public/report.pdf",
-    "public_url": "https://cloud.mail.ru/public/..."
+    "public_url_fingerprint": "sha256:example-public-link"
   },
   "warnings": []
 }
@@ -235,7 +244,8 @@ Runner не должен напрямую печатать в консоль.
     "details": {
       "remote_path": "/Personal/report.pdf",
       "public_root": "/Hermes/public"
-    }
+    },
+    "exit_code": 9
   }
 }
 ```
@@ -351,7 +361,7 @@ rclone_path = "rclone"
 
 private_root = "/Hermes/private"
 public_root = "/Hermes/public"
-doctor_root = "/Hermes/.doctor"
+# explicit doctor --live uses a fresh /TEST/<unique-run-id>/ descendant
 
 default_overwrite = "never"
 probe_public_url = true
@@ -385,11 +395,9 @@ rclone config
 | cp | rclone | `rclone copyto remote:old remote:new` |
 | rm file | rclone | `rclone deletefile remote:path` |
 | rm dir | rclone | `rclone purge remote:path` with safety gates |
-| sync push | rclone | `rclone sync local remote:path` |
-| sync pull | rclone | `rclone sync remote:path local` |
 | link | rclone | `rclone link remote:path` |
 | publish | rclone | `copyto` + `link` |
-| unlink | probe first | `rclone link --unlink` or private API fallback |
+| unlink | conditional after live proof | `rclone link --unlink` only; no private API fallback in v0.1 |
 
 ---
 
@@ -411,7 +419,8 @@ rclone config
   "operation": "publish",
   "error": {
     "kind": "unsafe_public_path",
-    "message": "Publishing outside /Hermes/public is blocked by policy."
+    "message": "Publishing outside /Hermes/public is blocked by policy.",
+    "exit_code": 9
   }
 }
 ```
@@ -422,8 +431,7 @@ rclone config
 
 ```text
 rm
-sync --delete
-unlink
+publish
 batch write operations
 ```
 
@@ -463,11 +471,14 @@ dangerous_file_pattern
 confirmation_required
 backend_unsupported
 network_error
+retry_exhausted
 timeout
 parse_error
-partial_failure
 unknown_error
 ```
+
+`partial_failure` is a batch result status with process exit `11`, not an
+`error.kind`.
 
 ---
 

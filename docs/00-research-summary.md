@@ -1,5 +1,13 @@
 # 00. Research Summary — Hermes MailCloud
 
+> [!important]
+> **Contract freeze (2026-07-24):** v0.1 requires `doctor`, `ls`, `stat`,
+> `mkdir`, `upload`, `download`, `mv`, `cp`, `rm`, `publish`, `link`, and
+> `batch`; `unlink` is conditional on a live rclone unlink-plus-invalidation
+> proof. `sync`, `resolve`, private API, link expiration/passwords and full
+> link audit are post-v0.1; `auth` is not a command. This research record does
+> not override the frozen contract or prove current implementation.
+
 > Статус: draft  
 > Дата: 2026-07-04  
 > Проект: `hermes-mailcloud`  
@@ -225,7 +233,7 @@ advanced sharing options
 Не форкать rclone в v0.1.
 Не копировать код PyMailCloud.
 Использовать rclone как внешний CLI-бинарник.
-Private API писать самостоятельно и только после live-probe.
+Private-API research is post-v0.1 and never an automatic fallback for a failed probe.
 ```
 
 ---
@@ -238,7 +246,7 @@ Private API писать самостоятельно и только после
 | базовые файловые операции | 99% | rclone + WebDAV |
 | upload → public link | 98–99% | rclone docs + source |
 | link для существующего файла | 98–99% | `rclone link` |
-| unlink | 85–98% | нужен live-probe; возможно private API fallback |
+| unlink | 85–98% | needs live unlink-plus-invalidation proof; otherwise unsupported in v0.1 |
 | expire | 70–85% | rclone предупреждает про backend-зависимость |
 | password-protected folder link | 60–80% | есть в UI, API требует отдельного исследования |
 | direct download URL для агента | 70–90% | отдельная задача `resolve-public` |

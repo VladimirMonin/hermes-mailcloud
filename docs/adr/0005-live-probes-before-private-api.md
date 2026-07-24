@@ -1,8 +1,14 @@
 # ADR 0005. Live probes before private API
 
+<!-- hmc-json-example-default: non-contract -->
+
 > Статус: accepted  
 > Дата: 2026-07-04  
 > Проект: `hermes-mailcloud`
+
+> Compatibility update (2026-07-24): ADR 0006 freezes v0.1 to the external
+> rclone backend. A failed unlink probe records `unsupported`; it does not
+> authorize a private-API fallback in this release.
 
 
 ## Контекст
@@ -80,7 +86,7 @@ small script -> live result -> documented decision -> production code
   "capability": "public_link_create",
   "result": {
     "supported": true,
-    "public_url": "https://cloud.mail.ru/public/..."
+    "public_url_fingerprint": "sha256:example-public-link"
   },
   "cleanup": {
     "remote_file_removed": true

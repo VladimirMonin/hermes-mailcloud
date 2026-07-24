@@ -2,152 +2,95 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://example.local/hermes-mailcloud/schemas/doctor-report.schema.json",
   "title": "Hermes MailCloud Doctor Report",
-  "type": "object",
-  "additionalProperties": false,
-  "required": [
-    "ok",
-    "operation",
-    "result"
+  "allOf": [
+    {"$ref": "https://example.local/hermes-mailcloud/schemas/result-envelope.schema.json"},
+    {
+      "type": "object",
+      "required": ["operation"],
+      "properties": {
+        "operation": {"const": "doctor"},
+        "result": {"$ref": "#/$defs/doctorResult"}
+      }
+    }
   ],
-  "properties": {
-    "ok": {
-      "type": "boolean"
-    },
-    "operation": {
-      "type": "string",
-      "const": "doctor"
-    },
-    "trace_id": {
-      "type": [
-        "string",
-        "null"
-      ]
-    },
-    "profile": {
-      "type": [
-        "string",
-        "null"
-      ]
-    },
-    "remote": {
-      "type": [
-        "string",
-        "null"
-      ]
-    },
-    "result": {
+  "$defs": {
+    "capability": {"type": "string", "enum": ["unknown", "supported", "unsupported"]},
+    "doctorResult": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "checks",
-        "capabilities"
-      ],
+      "required": ["mode", "checks", "capabilities"],
       "properties": {
+        "mode": {"type": "string", "enum": ["read_only", "live"]},
+        "test_root": {"type": "string", "pattern": "^/TEST/[^/]+(?:/.*)?$"},
         "checks": {
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "rclone_installed": {
-              "type": "boolean"
-            },
-            "rclone_version": {
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "remote_exists": {
-              "type": "boolean"
-            },
-            "cloud_access": {
-              "type": "boolean"
-            },
-            "upload": {
-              "type": "boolean"
-            },
-            "download": {
-              "type": "boolean"
-            },
-            "publish": {
-              "type": "boolean"
-            },
-            "public_url_probe": {
-              "type": "boolean"
-            },
-            "unlink": {
-              "type": "boolean"
-            },
-            "cleanup": {
-              "type": "boolean"
-            }
+            "rclone_installed": {"type": "boolean"},
+            "rclone_version": {"type": ["string", "null"]},
+            "remote_configured": {"type": "boolean"},
+            "cloud_access": {"type": "boolean"},
+            "file_cycle": {"type": "boolean"},
+            "public_link_create": {"type": "boolean"},
+            "public_url_probe": {"type": "boolean"},
+            "unlink_invalidation": {"type": "boolean"},
+            "cleanup": {"type": "boolean"}
           }
         },
         "capabilities": {
           "type": "object",
           "additionalProperties": false,
+          "required": ["file_ops", "public_link_create", "public_link_unlink"],
           "properties": {
-            "file_ops": {
-              "type": "string",
-              "enum": [
-                "unknown",
-                "supported",
-                "unsupported",
-                "partial"
-              ]
-            },
-            "public_link_create": {
-              "type": "string",
-              "enum": [
-                "unknown",
-                "supported",
-                "unsupported",
-                "partial"
-              ]
-            },
-            "public_link_unlink": {
-              "type": "string",
-              "enum": [
-                "unknown",
-                "supported",
-                "unsupported",
-                "partial"
-              ]
-            },
-            "public_link_expire": {
-              "type": "string",
-              "enum": [
-                "unknown",
-                "supported",
-                "unsupported",
-                "partial"
-              ]
-            },
-            "direct_download_url": {
-              "type": "string",
-              "enum": [
-                "unknown",
-                "supported",
-                "unsupported",
-                "partial"
-              ]
+            "file_ops": {"$ref": "#/$defs/capability"},
+            "public_link_create": {"$ref": "#/$defs/capability"},
+            "public_link_unlink": {"$ref": "#/$defs/capability"}
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"mode": {"const": "read_only"}}, "required": ["mode"]},
+          "then": {
+            "properties": {
+              "test_root": false,
+              "checks": {
+                "required": ["rclone_installed", "rclone_version", "remote_configured", "cloud_access"],
+                "not": {
+                  "anyOf": [
+                    {"required": ["file_cycle"]},
+                    {"required": ["public_link_create"]},
+                    {"required": ["public_url_probe"]},
+                    {"required": ["unlink_invalidation"]},
+                    {"required": ["cleanup"]}
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {"properties": {"mode": {"const": "live"}}, "required": ["mode"]},
+          "then": {
+            "required": ["test_root"],
+            "properties": {
+              "checks": {
+                "required": [
+                  "rclone_installed",
+                  "rclone_version",
+                  "remote_configured",
+                  "cloud_access",
+                  "file_cycle",
+                  "public_link_create",
+                  "public_url_probe",
+                  "unlink_invalidation",
+                  "cleanup"
+                ]
+              }
             }
           }
         }
-      }
-    },
-    "warnings": {
-      "type": "array",
-      "items": {
-        "type": "string"
-      },
-      "default": []
-    },
-    "error": {
-      "type": [
-        "object",
-        "null"
-      ],
-      "additionalProperties": true
+      ]
     }
   },
   "examples": [
@@ -157,29 +100,45 @@
       "profile": "default",
       "remote": "mailru:",
       "result": {
+        "mode": "read_only",
         "checks": {
           "rclone_installed": true,
           "rclone_version": "1.74.3",
-          "remote_exists": true,
+          "remote_configured": true,
+          "cloud_access": true
+        },
+        "capabilities": {
+          "file_ops": "unknown",
+          "public_link_create": "unknown",
+          "public_link_unlink": "unknown"
+        }
+      },
+      "warnings": []
+    },
+    {
+      "ok": true,
+      "operation": "doctor",
+      "result": {
+        "mode": "live",
+        "test_root": "/TEST/hermes-mailcloud-20260724-01",
+        "checks": {
+          "rclone_installed": true,
+          "rclone_version": "1.74.3",
+          "remote_configured": true,
           "cloud_access": true,
-          "upload": true,
-          "download": true,
-          "publish": true,
+          "file_cycle": true,
+          "public_link_create": true,
           "public_url_probe": true,
-          "unlink": false,
+          "unlink_invalidation": false,
           "cleanup": true
         },
         "capabilities": {
           "file_ops": "supported",
           "public_link_create": "supported",
-          "public_link_unlink": "unknown",
-          "public_link_expire": "unknown",
-          "direct_download_url": "unknown"
+          "public_link_unlink": "unsupported"
         }
       },
-      "warnings": [
-        "unlink is not confirmed for this backend"
-      ]
+      "warnings": ["unlink is not shipped without confirmed invalidation"]
     }
   ]
 }

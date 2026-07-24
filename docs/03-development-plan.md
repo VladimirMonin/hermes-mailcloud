@@ -1,5 +1,13 @@
 # 03. Development Plan — Hermes MailCloud
 
+> [!important]
+> **Contract freeze (2026-07-24):** the active v0.1 scope is `doctor`, `ls`,
+> `stat`, `mkdir`, `upload`, `download`, `mv`, `cp`, `rm`, `publish`, `link`,
+> and `batch`; `unlink` is conditional on live rclone unlink plus URL
+> invalidation. `sync`, `resolve`, private API, expiration/password links and
+> full link audit are post-v0.1. Historical waves below are planning material
+> and do not make a command part of the frozen release.
+
 > Статус: draft  
 > Дата: 2026-07-04  
 > Проект: `hermes-mailcloud`  
@@ -158,7 +166,7 @@ feat(probes): add rclone environment probe
 #### Вызов
 
 ```bash
-uv run python scripts/probes/01_file_ops_probe.py --remote mailru: --root /Hermes/.doctor --json
+uv run python scripts/probes/01_file_ops_probe.py --remote mailru: --root /TEST/<unique-run-id> --json
 ```
 
 #### Проверяет
@@ -186,7 +194,7 @@ feat(probes): add file operations probe
 #### Вызов
 
 ```bash
-uv run python scripts/probes/02_publish_probe.py --remote mailru: --root /Hermes/.doctor --json
+uv run python scripts/probes/02_publish_probe.py --remote mailru: --root /TEST/<unique-run-id> --json
 ```
 
 #### Проверяет
@@ -211,7 +219,7 @@ feat(probes): add public link probe
 #### Вызов
 
 ```bash
-uv run python scripts/probes/03_unlink_probe.py --remote mailru: --root /Hermes/.doctor --json
+uv run python scripts/probes/03_unlink_probe.py --remote mailru: --root /TEST/<unique-run-id> --json
 ```
 
 #### Проверяет
@@ -259,9 +267,9 @@ feat(probes): add public URL accessibility probe
 
 ```bash
 uv run python scripts/probes/00_env_probe.py --remote mailru: --json
-uv run python scripts/probes/01_file_ops_probe.py --remote mailru: --root /Hermes/.doctor --json
-uv run python scripts/probes/02_publish_probe.py --remote mailru: --root /Hermes/.doctor --json
-uv run python scripts/probes/03_unlink_probe.py --remote mailru: --root /Hermes/.doctor --json
+uv run python scripts/probes/01_file_ops_probe.py --remote mailru: --root /TEST/<unique-run-id> --json
+uv run python scripts/probes/02_publish_probe.py --remote mailru: --root /TEST/<unique-run-id> --json
+uv run python scripts/probes/03_unlink_probe.py --remote mailru: --root /TEST/<unique-run-id> --json
 ```
 
 ### Acceptance criteria
@@ -443,8 +451,8 @@ links audit
 ```text
 1. Проверить rclone link --unlink.
 2. Если реально работает — использовать rclone.
-3. Если нет — сделать private API spike.
-4. Добавить audit по локальному journal.
+3. Если нет — зафиксировать `unlink` как unsupported and keep it out of v0.1.
+4. Full links audit and any private-API research remain post-v0.1.
 ```
 
 ### Коммиты
@@ -458,9 +466,11 @@ links audit
 | `feat(commands): add links audit` | HTTP probe | fake HTTP |
 | `docs: document unlink support matrix` | docs | review |
 
-### Optional private API branch
+### Historical post-v0.1 private API research
 
-Если `rclone --unlink` не работает:
+If `rclone --unlink` does not pass its invalidation proof, v0.1 records
+`unsupported`; it does not add a fallback. Any later private-API research is a
+separate post-v0.1 proposal:
 
 | Коммит | Содержание |
 |---|---|
@@ -507,8 +517,8 @@ hermes-mailcloud batch plan.json --json --yes
 ```text
 batch dry-run ничего не меняет
 batch execution работает с mkdir/upload/publish
-partial failure возвращает results[]
-каждый item имеет ok/op/error или result
+partial failure returns `result.items` and process exit 11
+each `result.items` entry has index/operation/ok and exactly one result or error
 ```
 
 ---
@@ -540,7 +550,7 @@ hermes-mailcloud doctor --json
 
 ```text
 doctor показывает все ключевые проверки
-doctor не оставляет мусор в /Hermes/.doctor
+live doctor cleans only its own `/TEST/<unique-run-id>/` descendants
 doctor возвращает warnings вместо скрытых догадок
 ```
 
@@ -612,7 +622,7 @@ HMC_LIVE=1 HMC_REMOTE=mailru: uv run pytest -q -m live
 publish запрещён вне public_root
 dangerous file patterns blocked
 rm без --yes падает
-sync --delete без --yes падает
+rclone write retries are never automatic without an operation-specific idempotency decision
 rclone link parser принимает только cloud.mail.ru/public
 rclone errors превращаются в stable error.kind
 JSON не содержит секреты

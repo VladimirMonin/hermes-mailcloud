@@ -1,8 +1,15 @@
 # ADR 0004. Public root safety policy
 
+<!-- hmc-json-example-default: result-envelope -->
+
 > Статус: accepted  
 > Дата: 2026-07-04  
 > Проект: `hermes-mailcloud`
+
+> Compatibility note (2026-07-24): ADR 0006 supersedes this ADR's historical
+> escape-hatch proposal for v0.1. The current v0.1 contract has no
+> `--allow-outside-public-root` flag and fixes `publish`/`link` to normalized
+> descendants of `/Hermes/public`.
 
 
 ## Контекст
@@ -37,7 +44,8 @@ hermes-mailcloud publish ./report.pdf /Personal/report.pdf --json
   "operation": "publish",
   "error": {
     "kind": "unsafe_public_path",
-    "message": "Publishing is allowed only inside /Hermes/public."
+    "message": "Publishing is allowed only inside /Hermes/public.",
+    "exit_code": 9
   }
 }
 ```
@@ -70,15 +78,15 @@ sync --delete
 batch with destructive operations
 ```
 
-## Escape hatch
+## Historical escape-hatch proposal (not v0.1)
 
-Для ручных сценариев можно добавить флаг:
+This was an early possible design, not a v0.1 feature:
 
 ```bash
 --allow-outside-public-root
 ```
 
-Но в `--json` режиме этот флаг должен быть явным. Никаких интерактивных подтверждений.
+ADR 0006 rejects this escape hatch for v0.1, including JSON mode.
 
 ## Обоснование
 
@@ -87,7 +95,7 @@ batch with destructive operations
 ```text
 private work -> /Hermes/private
 published artifacts -> /Hermes/public
-temporary checks -> /Hermes/.doctor
+test-only mutations -> /TEST/<unique-run-id>
 ```
 
 ## Последствия
@@ -102,7 +110,7 @@ temporary checks -> /Hermes/.doctor
 Минусы:
 
 - пользователь должен соблюдать структуру папок;
-- часть сценариев потребует явного override;
+- scenarios outside the fixed root are deferred to a later explicit contract;
 - нужно тестировать path normalization.
 
 ## Required tests
@@ -112,6 +120,6 @@ temporary checks -> /Hermes/.doctor
 [ ] publish outside /Hermes/public fails.
 [ ] link outside /Hermes/public fails by default.
 [ ] dangerous filenames fail.
-[ ] override works only with explicit flag.
+[ ] no v0.1 override flag is accepted.
 [ ] normalized paths cannot escape public root.
 ```
