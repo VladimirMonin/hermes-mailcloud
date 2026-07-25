@@ -23,6 +23,20 @@ uv run pytest -q -m "not live"
 uv run ruff check .
 ```
 
+## Install for daily use
+
+Install a stable, non-editable command from an accepted repository revision:
+
+```bash
+uv tool install --python 3.12 .
+hermes-mailcloud version
+hermes-mailcloud --json doctor
+```
+
+Mail.ru credentials remain in the user's private `rclone` configuration. The
+complete student setup, local config, skill installation, and update procedure
+are in [`docs/11-local-installation.md`](docs/11-local-installation.md).
+
 ## Package smoke test
 
 Build and install the wheel into a fresh virtual environment. This smoke test
