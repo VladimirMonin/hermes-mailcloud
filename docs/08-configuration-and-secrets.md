@@ -64,17 +64,14 @@ rclone about mailru:
 
 ## 3. Конфиг hermes-mailcloud 📄
 
-Linux/macOS:
+The implemented default follows `XDG_CONFIG_HOME` on every supported platform:
 
 ```text
-~/.config/hermes-mailcloud/config.toml
+${XDG_CONFIG_HOME:-~/.config}/hermes-mailcloud/config.toml
 ```
 
-Windows:
-
-```text
-%APPDATA%\hermes-mailcloud\config.toml
-```
+Set `HMC_CONFIG` or pass `--config` to use a different path. The current code
+does not substitute a separate `%APPDATA%` default.
 
 Пример:
 
@@ -199,17 +196,16 @@ remote = "mailru:"
 
 ## 8. Links journal 🧾
 
-Linux/macOS:
+`links_journal` has no built-in default path: `publish` and `link` require an
+explicit profile value or `HMC_LINKS_JOURNAL`. A Linux/macOS owner-private
+example is:
 
 ```text
 ~/.local/share/hermes-mailcloud/links.jsonl
 ```
 
-Windows:
-
-```text
-%LOCALAPPDATA%\hermes-mailcloud\links.jsonl
-```
+Choose an owner-private path appropriate to the host platform; do not put the
+journal in the repository, a shared artifact directory, or CI output.
 
 Формат:
 

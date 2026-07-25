@@ -579,21 +579,26 @@ doctor возвращает warnings вместо скрытых догадок
 
 ```bash
 uv build
-uv tool install dist/*.whl
-hermes-mailcloud --help
-hermes-mailcloud doctor --json
-uv run pytest -q
+smoke_dir="$(mktemp -d)"
+uv venv "$smoke_dir/venv" --python 3.12
+uv pip install --python "$smoke_dir/venv/bin/python" dist/*.whl
+smoke_env=(env -i PATH="$PATH" HOME="$smoke_dir/home" XDG_CONFIG_HOME="$smoke_dir/config")
+"${smoke_env[@]}" "$smoke_dir/venv/bin/hermes-mailcloud" --help
+"${smoke_env[@]}" "$smoke_dir/venv/bin/hermes-mailcloud" version
+"${smoke_env[@]}" "$smoke_dir/venv/bin/hermes-mailcloud" --json doctor
+uv run pytest -q -m "not live"
 ```
 
 ### Acceptance criteria
 
 ```text
-утилита устанавливается
+wheel устанавливается в чистое virtual environment
 --help работает
-doctor работает
-publish/link работают live
+version работает из установленного wheel
+read-only doctor работает из установленного wheel
+CI не запускает live tests или probes по умолчанию
 README содержит quick start
-v0.1 release notes готовы
+v0.1 release notes перечисляют supported/unsupported capabilities
 ```
 
 ---

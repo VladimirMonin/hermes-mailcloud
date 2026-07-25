@@ -21,11 +21,19 @@
 hermes-mailcloud <command> ... --json
 ```
 
-Если команда меняет состояние, агент обязан явно передать:
+Only the confirmation-gated operations require `--yes` for a real run:
 
 ```bash
---yes
+rm ... --yes
+publish ... --yes
+batch plan.json --yes  # only when the plan has write operations
+doctor --live --yes
 ```
+
+`mkdir`, `upload`, `download`, `mv`, `cp`, and `link` still mutate local or
+remote state, but the frozen v0.1 policy does not require `--yes` for them.
+Agents should use `--dry-run` first when that mode is available and must never
+assume an automatic write retry.
 
 Для планирования агент сначала использует:
 
@@ -36,7 +44,7 @@ hermes-mailcloud <command> ... --json
 Типовой цикл:
 
 ```text
-dry-run → проверить JSON plan → выполнить с --yes → прочитать result/error
+dry-run → проверить JSON plan → выполнить с обязательным для команды подтверждением → прочитать result/error
 ```
 
 ## 2. Что агент может делать ✅
@@ -48,7 +56,7 @@ dry-run → проверить JSON plan → выполнить с --yes → п�
 | загрузить приватный файл | `upload local remote --json` |
 | скачать файл | `download remote local --json` |
 | создать папку | `mkdir remote --json` |
-| переименовать/переместить | `mv old new --json --yes` |
+| переименовать/переместить | `mv old new --json` |
 | опубликовать файл | `publish local remote --json --yes` |
 | получить ссылку на существующий файл | `link remote --json` |
 | закрыть публичный доступ | unavailable in v0.1 pending unlink proof |
@@ -290,7 +298,7 @@ probe/doctor reports
 
 ```text
 1. Всегда использовать --json.
-2. Для write-операций сначала использовать --dry-run.
+2. Для операций с поддержкой dry-run сначала использовать --dry-run.
 3. Не использовать --allow-outside-public-root.
 4. Не использовать --allow-dangerous-file.
 5. При ok=false читать error.kind.

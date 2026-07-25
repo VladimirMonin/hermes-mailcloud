@@ -1,0 +1,53 @@
+name: Offline CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    name: Offline quality and wheel smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v6
+      - name: Synchronize locked development environment
+        run: uv sync --locked --all-groups --all-extras
+      - name: Validate lockfile
+        run: uv lock --check
+      - name: Lint
+        run: uv run ruff check .
+      - name: Check formatting
+        run: uv run ruff format --check .
+      - name: Run offline tests
+        run: uv run pytest -q -m "not live"
+      - name: Build distributions
+        run: uv build
+      - name: Smoke-test the installed wheel in a clean environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          smoke_dir="$(mktemp -d)"
+          trap 'rm -rf "$smoke_dir"' EXIT
+          uv venv "$smoke_dir/venv" --python 3.12
+          uv pip install --python "$smoke_dir/venv/bin/python" dist/*.whl
+          smoke_env=(env -i PATH="$PATH" HOME="$smoke_dir/home" XDG_CONFIG_HOME="$smoke_dir/config")
+          "${smoke_env[@]}" "$smoke_dir/venv/bin/hermes-mailcloud" --help
+          "${smoke_env[@]}" "$smoke_dir/venv/bin/hermes-mailcloud" version
+          "${smoke_env[@]}" "$smoke_dir/venv/bin/hermes-mailcloud" --json doctor > "$smoke_dir/doctor.json"
+          "$smoke_dir/venv/bin/python" - "$smoke_dir/doctor.json" <<'PY'
+          import json
+          import sys
+
+          payload = json.load(open(sys.argv[1], encoding="utf-8"))
+          assert payload["ok"] is True
+          assert payload["operation"] == "doctor"
+          assert payload["result"]["mode"] == "read_only"
+          PY

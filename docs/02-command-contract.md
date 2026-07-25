@@ -16,7 +16,7 @@
 > link expiration/passwords, and full link audit are post-v0.1. `auth` is not
 > a command: read-only `doctor` reports credential readiness without exposing
 > credentials. This freeze takes precedence over older draft sections below.
-> The source tree implements `doctor`, `ls`, `stat`, `mkdir`, `upload`,
+> The source tree implements `version`, `doctor`, `ls`, `stat`, `mkdir`, `upload`,
 > `download`, `mv`, `cp`, `rm`, `publish`, `link`, and `batch`. `doctor` defaults
 > to read-only readiness checks; its explicitly confirmed live mode uses only
 > generated `/TEST` roots. `batch` strictly validates its version-1 discriminated
@@ -66,12 +66,20 @@ hermes-mailcloud publish ./report.pdf /Hermes/public/report.pdf --json --yes
 | `--pretty` | bool | false | человекочитаемый вывод |
 | `--quiet` | bool | false | подавить лишний вывод |
 | `--debug` | bool | false | подробная диагностика |
-| `--trace-id` | text | auto | id операции для логов |
+| `--trace-id` | text | none | caller-supplied operation correlation id |
 | `--dry-run` | bool | false | показать план без выполнения |
 | `--yes` | bool | false | подтвердить опасную операцию |
 | `--timeout` | int | 60 | timeout в секундах |
 | `--retries` | int | 0 | only safe read-only work retries automatically; writes do not in v0.1 |
 | `--no-color` | bool | false | отключить ANSI-цвета |
+
+---
+
+## 3.1. Команда `version`
+
+`hermes-mailcloud version` prints the installed package version without loading
+configuration or calling rclone. With `--json`, it returns a normal result
+envelope whose `result.version` contains the same value.
 
 ---
 

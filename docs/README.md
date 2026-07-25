@@ -1,6 +1,6 @@
 # Hermes MailCloud documentation
 
-`README.md` at the repository root is the current project entry point. This directory contains architecture research, proposed contracts, safety guidance, testing strategy, and accepted architectural decisions for the Wave 0 project.
+`README.md` at the repository root is the current project entry point. This directory contains the frozen v0.1 contract, safety guidance, testing strategy, release notes, historical architecture research, and accepted architectural decisions.
 
 > Many command and module descriptions are plans for later waves. Confirm implemented behavior in `src/hermes_mailcloud/` and `tests/`.
 
@@ -16,6 +16,7 @@
 - [`07-agent-integration.md`](07-agent-integration.md) — proposed agent-facing behavior.
 - [`08-configuration-and-secrets.md`](08-configuration-and-secrets.md) — configuration and secret boundaries.
 - [`09-known-risks.md`](09-known-risks.md) — known risks.
+- [`10-v0.1-release-notes.md`](10-v0.1-release-notes.md) — supported surface, package and CI release gates.
 - [`adr/`](adr/) — architectural decision records.
 - [`agent-workflow.md`](agent-workflow.md) — durable agent-instruction maintenance.
 

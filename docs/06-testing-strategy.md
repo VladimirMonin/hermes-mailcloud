@@ -260,10 +260,17 @@ Probe можно запускать до написания основного C
 В обычном CI:
 
 ```bash
+uv lock --check
 uv run ruff check .
 uv run ruff format --check .
 uv run pytest -q -m "not live"
+uv build
 ```
+
+`.github/workflows/ci.yml` additionally installs the produced wheel into a
+fresh virtual environment and exercises installed `--help`, `version`, and
+read-only `doctor --json`. The workflow receives no Mail.ru credentials and
+does not run a probe script or a `live`-marked test.
 
 Не запускать по умолчанию:
 
