@@ -53,6 +53,21 @@ def parse_lsjson(stdout: str, *, root: str) -> list[dict[str, object]]:
     return sorted(items, key=lambda item: str(item["path"]))
 
 
+def parse_stat(stdout: str, *, remote_path: str) -> dict[str, object]:
+    """Convert one strict lsjson --stat object into capability-aware metadata."""
+    try:
+        normalized_path = normalize_remote_path(remote_path)
+    except RemotePathError as exc:
+        raise RcloneParseError("stat path was invalid") from exc
+    try:
+        decoded = json.loads(stdout)
+    except (TypeError, json.JSONDecodeError) as exc:
+        raise RcloneParseError("rclone stat output was malformed") from exc
+    if not isinstance(decoded, Mapping):
+        raise RcloneParseError("rclone stat output must be an object")
+    return _parse_stat_item(decoded, remote_path=normalized_path)
+
+
 def parse_public_link(stdout: str) -> PublicLink:
     """Extract exactly one allowlisted HTTPS Mail.ru public capability URL."""
     candidates = [token for token in stdout.split() if token.startswith(PUBLIC_LINK_PREFIX)]
@@ -111,6 +126,48 @@ def _parse_lsjson_item(raw: object, *, root: str) -> dict[str, object]:
         if isinstance(size, bool) or not isinstance(size, int) or size < 0:
             raise RcloneParseError("rclone lsjson item file size was invalid")
         item["size"] = size
+    return item
+
+
+def _parse_stat_item(raw: Mapping[str, object], *, remote_path: str) -> dict[str, object]:
+    provider_path = raw.get("Path")
+    name = raw.get("Name")
+    is_directory = raw.get("IsDir")
+    if not isinstance(provider_path, str) or (
+        provider_path not in {"", "."} and not _is_safe_relative_path(provider_path)
+    ):
+        raise RcloneParseError("rclone stat item path was invalid")
+    if not isinstance(name, str) or not name:
+        raise RcloneParseError("rclone stat item name was invalid")
+    if not isinstance(is_directory, bool):
+        raise RcloneParseError("rclone stat item directory flag was invalid")
+
+    item: dict[str, object] = {
+        "remote_path": remote_path,
+        "type": "directory" if is_directory else "file",
+    }
+    modified = raw.get("ModTime")
+    if modified is not None:
+        if not isinstance(modified, str) or not modified:
+            raise RcloneParseError("rclone stat item modification time was invalid")
+        item["modified"] = modified
+    if is_directory:
+        return item
+
+    size = raw.get("Size")
+    if isinstance(size, bool) or not isinstance(size, int) or size < 0:
+        raise RcloneParseError("rclone stat item file size was invalid")
+    item["size"] = size
+    hashes = raw.get("Hashes")
+    if hashes is None:
+        return item
+    if not isinstance(hashes, Mapping) or any(
+        not isinstance(name, str) or not name or not isinstance(value, str) or not value
+        for name, value in hashes.items()
+    ):
+        raise RcloneParseError("rclone stat item hashes were invalid")
+    if hashes:
+        item["hashes"] = dict(sorted(hashes.items()))
     return item
 
 

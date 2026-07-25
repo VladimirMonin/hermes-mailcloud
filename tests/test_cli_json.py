@@ -136,20 +136,12 @@ def test_every_json_help_path_emits_one_json_document_without_rich_output(
 @pytest.mark.parametrize(
     ("operation", "arguments"),
     [
-        ("ls", ["/Hermes"]),
-        ("stat", ["/Hermes/example.txt"]),
-        ("mkdir", ["/Hermes/private/reports"]),
-        ("upload", ["local.txt", "/Hermes/private/remote.txt"]),
-        ("download", ["/Hermes/private/remote.txt", "local.txt"]),
-        ("mv", ["/Hermes/private/a.txt", "/Hermes/private/b.txt"]),
-        ("cp", ["/Hermes/private/a.txt", "/Hermes/private/b.txt"]),
-        ("rm", ["/Hermes/private/old.txt"]),
         ("publish", ["local.txt", "/Hermes/public/remote.txt"]),
         ("link", ["/Hermes/public/remote.txt"]),
         ("batch", ["plan.json"]),
     ],
 )
-def test_every_unimplemented_v0_1_command_returns_a_typed_nonzero_json_error(
+def test_remaining_unimplemented_v0_1_commands_return_a_typed_nonzero_json_error(
     operation: str, arguments: list[str]
 ) -> None:
     result = _run_cli(operation, *arguments, "--json")

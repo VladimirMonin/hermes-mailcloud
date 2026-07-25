@@ -2,7 +2,9 @@
 
 Agent CLI for Mail.ru Cloud — rclone-backed, JSON-first, safety-aware.
 
-> Status: **Wave 0 — project bootstrap**  
+> Status: **v0.1 in progress** — `ls`, `stat`, `mkdir`, `upload`, `download`,
+> `mv`, `cp`, and guarded `rm` use the typed rclone boundary; later commands
+> remain separate implementation slices.
 > Full documentation: `docs/`
 
 ## Quick start (development)
@@ -19,6 +21,9 @@ uv run ruff check .
 ```bash
 HMC_LIVE=1 HMC_REMOTE=mailru: uv run pytest -q -m live
 ```
+
+The live file suite creates and removes only one fresh `/TEST/hermes-mailcloud-*`
+root (or a validated `HMC_TEST_ROOT` override); it never uses existing cloud data.
 
 ## Architecture
 

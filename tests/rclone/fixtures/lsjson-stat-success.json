@@ -1,0 +1,11 @@
+{
+  "Path": "private/notes.txt",
+  "Name": "notes.txt",
+  "Size": 17,
+  "MimeType": "text/plain",
+  "ModTime": "2026-07-25T01:02:03Z",
+  "IsDir": false,
+  "Hashes": {
+    "MD5": "0123456789abcdef0123456789abcdef"
+  }
+}

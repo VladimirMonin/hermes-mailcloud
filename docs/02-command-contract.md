@@ -284,12 +284,16 @@ hermes-mailcloud stat /Hermes/public/report.pdf --json
     "type": "file",
     "size": 18420,
     "modified": "2026-07-04T09:15:12Z",
-    "hash": {
-      "mailru": "..."
+    "hashes": {
+      "MD5": "..."
     }
   }
 }
 ```
+
+`stat` requests rclone hash metadata, but the `hashes` object is present only
+when the configured backend returns validated non-empty values. Its absence is
+an explicit capability limitation, not a failed command.
 
 ---
 
@@ -305,10 +309,9 @@ hermes-mailcloud mkdir /Hermes/private/reports --json
 
 ### Опции
 
-| Флаг | Назначение |
-|---|---|
-| `--parents` | создать родительские директории, если backend позволяет |
-| `--exist-ok` | не считать ошибкой уже существующую папку |
+v0.1 passes the normalized path to `rclone mkdir`; it has no separate
+`--parents` or `--exist-ok` CLI options. The backend's documented mkdir
+semantics determine parent/existing-directory handling.
 
 ### JSON успеха
 
@@ -322,6 +325,11 @@ hermes-mailcloud mkdir /Hermes/private/reports --json
   }
 }
 ```
+
+`mkdir --dry-run` returns the normalized `remote_path`, `dry_run: true`, and a
+planned validation/execution sequence without starting rclone or changing cloud
+state. `created: true` records a successful rclone mkdir invocation; it does
+not claim that the path was absent immediately before that invocation.
 
 ---
 
@@ -344,6 +352,19 @@ hermes-mailcloud upload ./report.pdf /Hermes/private/report.pdf --json
 | `--max-size` | size | ограничить размер |
 | `--checksum` | bool | проверять checksum, если возможно |
 
+The implemented v0.1 slice accepts `--overwrite`; `--mkdirs`, `--max-size`,
+and `--checksum` remain planned rather than silently ignored. The effective
+overwrite mode is the explicit option or the profile's `default_overwrite`:
+
+| Mode | rclone behavior |
+|---|---|
+| `never` | uses `--immutable`, preserving a changed destination and surfacing the backend conflict |
+| `always` | uses `--ignore-times`, transferring unconditionally |
+| `if-newer` | uses `--update`, preserving a newer destination |
+
+`upload` creates no public link and never returns a URL. It invokes only
+`rclone copyto`; `published` is always `false` for this command.
+
 ### JSON успеха
 
 ```json
@@ -354,7 +375,8 @@ hermes-mailcloud upload ./report.pdf /Hermes/private/report.pdf --json
     "local_path": "./report.pdf",
     "remote_path": "/Hermes/private/report.pdf",
     "published": false,
-    "bytes": 18420
+    "bytes": 18420,
+    "overwrite": "never"
   }
 }
 ```
@@ -377,6 +399,30 @@ hermes-mailcloud download /Hermes/private/report.pdf ./report.pdf --json
 |---|---|---|
 | `--overwrite` | `never`, `always`, `if-newer` | политика конфликта |
 | `--checksum` | bool | проверка после скачивания |
+
+The implemented v0.1 slice accepts `--overwrite`; `--checksum` remains planned
+rather than silently ignored. Download writes to a unique temporary sibling of
+the requested local target. Only after rclone has succeeded is that temporary
+file committed: `never` rejects an existing local target, `always` replaces it,
+and `if-newer` replaces it only when the downloaded file is newer. A rclone
+failure or timeout attempts to clean up the temporary file and leaves an existing target
+unchanged.
+
+### JSON успеха
+
+```json
+{
+  "ok": true,
+  "operation": "download",
+  "result": {
+    "remote_path": "/Hermes/private/report.pdf",
+    "local_path": "./report.pdf",
+    "bytes": 18420,
+    "updated": true,
+    "overwrite": "never"
+  }
+}
+```
 
 ---
 
@@ -403,6 +449,11 @@ hermes-mailcloud mv /Hermes/private/a.txt /Hermes/private/b.txt --json
 }
 ```
 
+`mv` and `cp` accept `--overwrite` with the same `never`, `always`, and
+`if-newer` semantics as upload. They normalize both remote paths, reject a
+source equal to its target, make no automatic write retry, and invoke one
+`rclone moveto` or `rclone copyto` command respectively.
+
 ---
 
 ## 13. Команда `cp` 📋
@@ -414,6 +465,8 @@ hermes-mailcloud mv /Hermes/private/a.txt /Hermes/private/b.txt --json
 ```bash
 hermes-mailcloud cp /Hermes/private/a.txt /Hermes/private/a-copy.txt --json
 ```
+
+`cp` has the same overwrite and no-retry behavior as `mv`.
 
 ---
 
@@ -434,6 +487,20 @@ hermes-mailcloud rm /Hermes/private/old.txt --json --yes
 | `--recursive` | удалить папку рекурсивно |
 | `--yes` | обязательное подтверждение для JSON-режима |
 | `--dry-run` | показать план удаления |
+
+`rm` is permanently destructive. Every real invocation requires `--yes`; a
+dry-run still validates the normalized target but never starts rclone. Exact
+protected targets are rejected before the backend: `/`, `/TEST`, `/Hermes`, and
+the configured private, public, and temporary roots. Descendants are not made
+safe merely by this guard: callers remain responsible for choosing an intended
+path.
+
+Without `--recursive`, the implementation invokes `rclone deletefile` and is
+therefore limited to one remote file. With `--recursive`, it invokes
+`rclone purge`, which removes the target and every descendant. The command does
+not expose provider trash, recycle-bin, restore, or retention semantics and
+returns no recoverable-trash identifier; successful deletion must be treated as
+irreversible even if a provider happens to retain data internally.
 
 ### Ошибка без `--yes`
 

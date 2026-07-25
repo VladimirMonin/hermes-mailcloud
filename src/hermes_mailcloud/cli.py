@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import sys
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated, Any
@@ -13,14 +13,21 @@ import typer._click as click
 from typer.core import TyperGroup
 
 from . import __version__
-from .core.errors import ErrorKind, ErrorPayload
+from .commands.mkdir import MkdirCommand
+from .commands.move_copy import MoveCopyCommands
+from .commands.read import ReadCommands
+from .commands.remove import RemoveCommand
+from .commands.transfer import TransferCommands
+from .config import CliConfigOverrides, ResolvedConfig, resolve_config
+from .core.errors import ErrorKind, ErrorPayload, MailCloudError
 from .core.result import ResultEnvelope
+from .rclone.runner import RcloneRunner
 
 
 class _GlobalOptionsGroup(TyperGroup):
     """Allow interspersed global options and JSON-safe Click usage failures."""
 
-    allow_interspersed_args = True
+    allow_interspersed_args = False
 
     def main(
         self,
@@ -31,14 +38,14 @@ class _GlobalOptionsGroup(TyperGroup):
         windows_expand_args: bool = True,
         **extra: Any,
     ) -> Any:
-        raw_args = list(args) if args is not None else None
-        inspected_args = raw_args if raw_args is not None else list(sys.argv[1:])
+        raw_args = list(args) if args is not None else list(sys.argv[1:])
+        inspected_args = raw_args
         if standalone_mode and _json_help_requested(inspected_args):
             _emit_json_help(inspected_args)
             raise SystemExit(0)
         try:
             result = super().main(
-                args=raw_args,
+                args=_normalize_global_options(raw_args),
                 prog_name=prog_name,
                 complete_var=complete_var,
                 standalone_mode=False,
@@ -77,7 +84,7 @@ class CliRuntimeOptions:
     dry_run: bool
     yes: bool
     timeout_seconds: int | None
-    retries: int
+    retries: int | None
     no_color: bool
 
 
@@ -106,7 +113,7 @@ def main(
     dry_run: bool = typer.Option(False, "--dry-run", help="validate and plan without execution"),
     yes: bool = typer.Option(False, "--yes", help="confirm a dangerous operation"),
     timeout_seconds: int | None = typer.Option(None, "--timeout", min=1, help="rclone timeout"),
-    retries: int = typer.Option(0, "--retries", min=0, help="safe read-only retries"),
+    retries: int | None = typer.Option(None, "--retries", min=0, help="safe read-only retries"),
     no_color: bool = typer.Option(False, "--no-color", help="disable ANSI color"),
 ) -> None:
     """Parse all v0.1 global flags without starting a backend process."""
@@ -152,10 +159,24 @@ def doctor(context: typer.Context) -> None:
 
 
 @app.command()
-def ls(context: typer.Context, path: str = typer.Argument(..., help="remote path to list")) -> None:
+def ls(
+    context: typer.Context,
+    path: str = typer.Argument(..., help="remote path to list"),
+    recursive: bool = typer.Option(False, "--recursive", help="list descendants recursively"),
+    files_only: bool = typer.Option(False, "--files-only", help="list files only"),
+    dirs_only: bool = typer.Option(False, "--dirs-only", help="list directories only"),
+) -> None:
     """List files and folders."""
-    del path
-    _placeholder(context, "ls")
+    _run_rclone_command(
+        context,
+        "ls",
+        lambda config, backend: ReadCommands(
+            backend,
+            config,
+            timeout_seconds=_effective_timeout(_options(context), config),
+            retries=_effective_read_retries(_options(context), config),
+        ).ls(path, recursive=recursive, files_only=files_only, dirs_only=dirs_only),
+    )
 
 
 @app.command()
@@ -164,8 +185,16 @@ def stat(
     remote_path: str = typer.Argument(..., help="remote path to inspect"),
 ) -> None:
     """Inspect one remote file or folder."""
-    del remote_path
-    _placeholder(context, "stat")
+    _run_rclone_command(
+        context,
+        "stat",
+        lambda config, backend: ReadCommands(
+            backend,
+            config,
+            timeout_seconds=_effective_timeout(_options(context), config),
+            retries=_effective_read_retries(_options(context), config),
+        ).stat(remote_path),
+    )
 
 
 @app.command()
@@ -174,8 +203,21 @@ def mkdir(
     remote_path: str = typer.Argument(..., help="remote directory path"),
 ) -> None:
     """Create a remote directory."""
-    del remote_path
-    _placeholder(context, "mkdir")
+    options = _options(context)
+    _run_rclone_command(
+        context,
+        "mkdir",
+        lambda config, backend: MkdirCommand(
+            backend,
+            config,
+            timeout_seconds=_effective_timeout(options, config),
+        ).run(
+            remote_path,
+            dry_run=options.dry_run,
+            yes=options.yes,
+            retries=_effective_write_retries(options),
+        ),
+    )
 
 
 @app.command()
@@ -183,10 +225,25 @@ def upload(
     context: typer.Context,
     local: str = typer.Argument(..., help="local file path"),
     remote_path: str = typer.Argument(..., help="destination remote path"),
+    overwrite: str | None = typer.Option(
+        None, "--overwrite", help="never, always, or if-newer (profile default when omitted)"
+    ),
 ) -> None:
     """Upload a file (private by default)."""
-    del local, remote_path
-    _placeholder(context, "upload")
+    options = _options(context)
+    _run_rclone_command(
+        context,
+        "upload",
+        lambda config, backend: TransferCommands(
+            backend, config, timeout_seconds=_effective_timeout(options, config)
+        ).upload(
+            local,
+            remote_path,
+            overwrite=overwrite,
+            dry_run=options.dry_run,
+            retries=_effective_write_retries(options),
+        ),
+    )
 
 
 @app.command()
@@ -194,10 +251,25 @@ def download(
     context: typer.Context,
     remote_path: str = typer.Argument(..., help="source remote file path"),
     local: str = typer.Argument(..., help="destination local file path"),
+    overwrite: str | None = typer.Option(
+        None, "--overwrite", help="never, always, or if-newer (profile default when omitted)"
+    ),
 ) -> None:
     """Download a remote file."""
-    del remote_path, local
-    _placeholder(context, "download")
+    options = _options(context)
+    _run_rclone_command(
+        context,
+        "download",
+        lambda config, backend: TransferCommands(
+            backend, config, timeout_seconds=_effective_timeout(options, config)
+        ).download(
+            remote_path,
+            local,
+            overwrite=overwrite,
+            dry_run=options.dry_run,
+            retries=_effective_write_retries(options),
+        ),
+    )
 
 
 @app.command()
@@ -205,10 +277,25 @@ def mv(
     context: typer.Context,
     source_path: str = typer.Argument(..., help="source remote path"),
     target_path: str = typer.Argument(..., help="destination remote path"),
+    overwrite: str | None = typer.Option(
+        None, "--overwrite", help="never, always, or if-newer (profile default when omitted)"
+    ),
 ) -> None:
     """Move or rename a remote object."""
-    del source_path, target_path
-    _placeholder(context, "mv")
+    options = _options(context)
+    _run_rclone_command(
+        context,
+        "mv",
+        lambda config, backend: MoveCopyCommands(
+            backend, config, timeout_seconds=_effective_timeout(options, config)
+        ).move(
+            source_path,
+            target_path,
+            overwrite=overwrite,
+            dry_run=options.dry_run,
+            retries=_effective_write_retries(options),
+        ),
+    )
 
 
 @app.command()
@@ -216,20 +303,48 @@ def cp(
     context: typer.Context,
     source_path: str = typer.Argument(..., help="source remote path"),
     target_path: str = typer.Argument(..., help="destination remote path"),
+    overwrite: str | None = typer.Option(
+        None, "--overwrite", help="never, always, or if-newer (profile default when omitted)"
+    ),
 ) -> None:
     """Copy a remote object."""
-    del source_path, target_path
-    _placeholder(context, "cp")
+    options = _options(context)
+    _run_rclone_command(
+        context,
+        "cp",
+        lambda config, backend: MoveCopyCommands(
+            backend, config, timeout_seconds=_effective_timeout(options, config)
+        ).copy(
+            source_path,
+            target_path,
+            overwrite=overwrite,
+            dry_run=options.dry_run,
+            retries=_effective_write_retries(options),
+        ),
+    )
 
 
 @app.command()
 def rm(
     context: typer.Context,
     remote_path: str = typer.Argument(..., help="remote file or directory path"),
+    recursive: bool = typer.Option(False, "--recursive", help="delete a path and all descendants"),
 ) -> None:
-    """Delete a remote file or directory."""
-    del remote_path
-    _placeholder(context, "rm")
+    """Permanently delete one file, or a path and descendants with --recursive."""
+    options = _options(context)
+    _run_rclone_command(
+        context,
+        "rm",
+        lambda config, backend: RemoveCommand(
+            backend, config, timeout_seconds=_effective_timeout(options, config)
+        ).run(
+            remote_path,
+            recursive=recursive,
+            dry_run=options.dry_run,
+            yes=options.yes,
+            retries=_effective_write_retries(options),
+        ),
+    )
 
 
 @app.command()
@@ -280,6 +395,61 @@ def _placeholder(context: typer.Context, operation: str) -> None:
     raise typer.Exit(error.exit_code)
 
 
+def _run_rclone_command(
+    context: typer.Context,
+    operation: str,
+    action: Callable[[ResolvedConfig, RcloneRunner], dict[str, object]],
+) -> None:
+    """Resolve non-secret configuration, execute one adapter, and emit one safe envelope."""
+    options = _options(context)
+    config: ResolvedConfig | None = None
+    try:
+        config = resolve_config(
+            CliConfigOverrides(
+                profile=options.profile,
+                remote=options.remote,
+                config_path=options.config_path,
+            )
+        )
+        result = action(config, RcloneRunner(config.rclone_path))
+    except MailCloudError as exc:
+        envelope = ResultEnvelope.failure(
+            operation,
+            exc.error,
+            profile=config.profile if config is not None else options.profile,
+            remote=config.remote if config is not None else options.remote,
+            trace_id=options.trace_id,
+        )
+    else:
+        envelope = ResultEnvelope.success(
+            operation,
+            result,
+            profile=config.profile,
+            remote=config.remote,
+            trace_id=options.trace_id,
+        )
+    _emit(envelope, options)
+    if not envelope.ok:
+        raise typer.Exit(envelope.exit_code)
+
+
+def _effective_timeout(options: CliRuntimeOptions, config: ResolvedConfig) -> int:
+    """Use the explicit CLI timeout when present, otherwise the validated profile value."""
+    if options.timeout_seconds is not None:
+        return options.timeout_seconds
+    return config.timeout_seconds
+
+
+def _effective_read_retries(options: CliRuntimeOptions, config: ResolvedConfig) -> int:
+    """Use an explicit retry budget for reads, otherwise the profile's safe-read budget."""
+    return options.retries if options.retries is not None else config.retries
+
+
+def _effective_write_retries(options: CliRuntimeOptions) -> int:
+    """Ignore profile read retries, but validate an explicit write retry request fail-closed."""
+    return options.retries if options.retries is not None else 0
+
+
 def _options(context: typer.Context) -> CliRuntimeOptions:
     options = context.find_root().obj
     if not isinstance(options, CliRuntimeOptions):
@@ -309,6 +479,38 @@ def _option_arguments(args: Sequence[str]) -> Sequence[str]:
         return args[: args.index("--")]
     except ValueError:
         return args
+
+
+_GLOBAL_FLAGS = frozenset(
+    {"--json", "--pretty", "--quiet", "--debug", "--dry-run", "--yes", "--no-color"}
+)
+_GLOBAL_VALUE_OPTIONS = frozenset(
+    {"--profile", "--remote", "--config", "--trace-id", "--timeout", "--retries"}
+)
+
+
+def _normalize_global_options(args: Sequence[str]) -> list[str]:
+    """Move recognized global options ahead of a command without stealing command options."""
+    global_options: list[str] = []
+    command_arguments: list[str] = []
+    index = 0
+    while index < len(args):
+        argument = args[index]
+        if argument == "--":
+            command_arguments.extend(args[index:])
+            break
+        option_name = argument.split("=", 1)[0]
+        if option_name in _GLOBAL_FLAGS:
+            global_options.append(argument)
+        elif option_name in _GLOBAL_VALUE_OPTIONS:
+            global_options.append(argument)
+            if "=" not in argument and index + 1 < len(args):
+                index += 1
+                global_options.append(args[index])
+        else:
+            command_arguments.append(argument)
+        index += 1
+    return [*global_options, *command_arguments]
 
 
 def _command_name(args: Sequence[str]) -> str:
