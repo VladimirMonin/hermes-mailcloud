@@ -3,33 +3,50 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
 
 
-def _run_cli(*arguments: str) -> subprocess.CompletedProcess[str]:
+def _run_cli(
+    *arguments: str, environment: dict[str, str] | None = None
+) -> subprocess.CompletedProcess[str]:
+    env = os.environ.copy()
+    env.pop("HMC_CONFIG", None)
+    if environment:
+        env.update(environment)
     return subprocess.run(
         [sys.executable, "-m", "hermes_mailcloud.cli", *arguments],
         capture_output=True,
         text=True,
         timeout=10,
+        env=env,
     )
 
 
-def test_json_placeholder_returns_one_error_document_and_nonzero_exit() -> None:
-    result = _run_cli("--json", "--profile", "test", "--trace-id", "trace-123", "doctor")
+def _doctor_environment(tmp_path: Path) -> dict[str, str]:
+    return {
+        "XDG_CONFIG_HOME": str(tmp_path / "config-home"),
+        "HMC_RCLONE_PATH": sys.executable,
+        "HMC_REMOTE": "mailru:",
+    }
 
-    assert result.returncode == 12
+
+def test_json_live_doctor_requires_confirmation_before_config_or_backend_access() -> None:
+    result = _run_cli("--json", "--profile", "test", "--trace-id", "trace-123", "doctor", "--live")
+
+    assert result.returncode == 9
     assert result.stderr == ""
     assert result.stdout.count("\n") == 1
     payload = json.loads(result.stdout)
     assert payload == {
         "error": {
-            "exit_code": 12,
-            "kind": "backend_unsupported",
-            "message": "doctor is not implemented in this build",
+            "exit_code": 9,
+            "kind": "confirmation_required",
+            "message": "doctor --live requires --yes before it can create generated /TEST objects",
         },
         "ok": False,
         "operation": "doctor",
@@ -38,7 +55,7 @@ def test_json_placeholder_returns_one_error_document_and_nonzero_exit() -> None:
     }
 
 
-def test_global_options_are_accepted_after_the_command_name() -> None:
+def test_global_options_are_accepted_after_the_command_name(tmp_path: Path) -> None:
     result = _run_cli(
         "doctor",
         "--json",
@@ -51,10 +68,13 @@ def test_global_options_are_accepted_after_the_command_name() -> None:
         "--dry-run",
         "--yes",
         "--no-color",
+        environment=_doctor_environment(tmp_path),
     )
 
-    assert result.returncode == 12
-    assert json.loads(result.stdout)["error"]["kind"] == "backend_unsupported"
+    assert result.returncode == 0
+    payload = json.loads(result.stdout)
+    assert payload["result"]["mode"] == "read_only"
+    assert payload["result"]["checks"]["rclone_installed"] is False
     assert result.stderr == ""
 
 
@@ -68,12 +88,12 @@ def test_json_version_is_a_single_success_envelope() -> None:
     assert isinstance(payload["result"]["version"], str)
 
 
-def test_human_placeholder_fails_honestly_without_stdout_output() -> None:
-    result = _run_cli("doctor")
+def test_human_doctor_returns_a_read_only_report_without_raw_backend_output(tmp_path: Path) -> None:
+    result = _run_cli("doctor", environment=_doctor_environment(tmp_path))
 
-    assert result.returncode == 12
-    assert result.stdout == ""
-    assert "doctor is not implemented in this build" in result.stderr
+    assert result.returncode == 0
+    assert result.stdout == "command completed\n"
+    assert result.stderr == ""
 
 
 def test_json_missing_argument_returns_one_typed_error_document() -> None:
@@ -133,22 +153,12 @@ def test_every_json_help_path_emits_one_json_document_without_rich_output(
     assert payload["result"]["help"]["command"] == operation
 
 
-@pytest.mark.parametrize(
-    ("operation", "arguments"),
-    [
-        ("publish", ["local.txt", "/Hermes/public/remote.txt"]),
-        ("link", ["/Hermes/public/remote.txt"]),
-        ("batch", ["plan.json"]),
-    ],
-)
-def test_remaining_unimplemented_v0_1_commands_return_a_typed_nonzero_json_error(
-    operation: str, arguments: list[str]
-) -> None:
-    result = _run_cli(operation, *arguments, "--json")
+def test_batch_missing_plan_returns_a_typed_nonzero_json_error() -> None:
+    result = _run_cli("batch", "plan.json", "--json")
 
-    assert result.returncode == 12
+    assert result.returncode == 7
     payload = json.loads(result.stdout)
-    assert payload["operation"] == operation
+    assert payload["operation"] == "batch"
     assert payload["ok"] is False
-    assert payload["error"]["kind"] == "backend_unsupported"
+    assert payload["error"]["kind"] == "not_found"
     assert result.stderr == ""

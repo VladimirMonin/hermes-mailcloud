@@ -16,8 +16,12 @@
 > link expiration/passwords, and full link audit are post-v0.1. `auth` is not
 > a command: read-only `doctor` reports credential readiness without exposing
 > credentials. This freeze takes precedence over older draft sections below.
-> It is a target contract only: the current source tree remains a Wave 0
-> skeleton until a later implementation stage proves each command.
+> The source tree implements `doctor`, `ls`, `stat`, `mkdir`, `upload`,
+> `download`, `mv`, `cp`, `rm`, `publish`, `link`, and `batch`. `doctor` defaults
+> to read-only readiness checks; its explicitly confirmed live mode uses only
+> generated `/TEST` roots. `batch` strictly validates its version-1 discriminated
+> JSON plan before backend use. Each command section below states any narrower
+> implementation boundary.
 
 ---
 
@@ -179,12 +183,15 @@ hermes-mailcloud doctor --json
 
 ### Режимы проверок
 
-`doctor --json` is read-only: it may report rclone availability/version,
-configured remote and read-only cloud access, but it never creates an object or
-calls link/unlink. `doctor --json --live` is the explicit mutating mode. Every
-live run must use a newly generated descendant of `/TEST/<unique-run-id>/`,
-record that normalized root, and clean up only objects created by that run.
-Existing objects outside `/TEST` remain metadata/list-only.
+`doctor --json` is read-only: it resolves the non-secret profile, calls `rclone
+version`, then `listremotes` only when rclone is available, and calls the
+independent `lsd <remote>` and `about <remote>` checks only when the configured
+remote is listed. It never creates an object or calls link/unlink. `doctor --json
+--live --yes` is the explicit mutating mode; `--live` without `--yes` fails before
+config or backend access. A live run allocates fresh
+generated `/TEST/hermes-mailcloud-*` roots only after read-only readiness passes,
+records those roots, and cleans up only same-run objects. Existing objects outside
+`/TEST` remain metadata/list-only.
 
 ### JSON успеха: read-only mode
 
@@ -196,10 +203,13 @@ Existing objects outside `/TEST` remain metadata/list-only.
   "result": {
     "mode": "read_only",
     "checks": {
+      "config_loaded": true,
       "rclone_installed": true,
       "rclone_version": "1.74.3",
       "remote_configured": true,
-      "cloud_access": true
+      "remote_listed": true,
+      "cloud_access": true,
+      "about_available": true
     },
     "capabilities": {
       "file_ops": "unknown",
@@ -211,9 +221,14 @@ Existing objects outside `/TEST` remain metadata/list-only.
 ```
 
 Live mode adds only `/TEST`-scoped file-cycle, link, bounded URL and cleanup
-checks. `unlink` becomes `supported` only after the same live run proves URL
-invalidation; otherwise it is `unknown` or `unsupported` and remains absent
-from the CLI.
+checks. Capability values are distinct: `supported` is positive evidence,
+`unsupported` is a provider-level negative result (for unlink, either an explicit
+unsupported response or a successful unlink command without URL invalidation),
+`failed` is an attempted but inconclusive error, and `unknown` was not attempted.
+`unlink` becomes `supported` only after the same live run proves URL invalidation;
+otherwise it remains absent from the CLI. `cleanup: true` means every root created
+by this run was read back as removed; a failed cleanup is reported rather than
+widened to adjacent data.
 
 ---
 
@@ -546,11 +561,22 @@ return JSON
 | Флаг | Значения | Назначение |
 |---|---|---|
 | `--overwrite` | `never`, `always`, `if-newer` | политика конфликта |
-| `--probe-url` | bool | bounded URL probe; URL remains owner-private capability data |
 
 `publish` requires `--yes` unless it is `--dry-run`. Its normalized remote
 path must be a descendant of the fixed `/Hermes/public` root. v0.1 has no
-`--allow-outside-public-root` escape hatch and no expiration option.
+`--allow-outside-public-root` escape hatch and no expiration option. Real
+execution also requires `links_journal` in the selected profile or
+`HMC_LINKS_JOURNAL`. Before upload, the CLI checks that the journal location is
+safe; after rclone creates the link it writes one complete JSONL record through
+an owner-only, atomic local update. The private journal retains the raw public
+capability for the owner; JSON output and normal diagnostics return only its
+fingerprint. A journal-preparation failure occurs before any rclone call, but a
+failure after a successful `rclone link` is reported without attempting an
+unproven unlink rollback.
+
+The product command does not run an HTTP URL probe. Bounded public-URL checks
+remain an opt-in isolated `/TEST/<unique-run-id>/` probe workflow so the normal
+CLI never sends an owner capability to diagnostics or an unbounded network path.
 
 ### JSON успеха
 
@@ -585,10 +611,13 @@ hermes-mailcloud link /Hermes/public/report.pdf --json
 
 | Флаг | Назначение |
 |---|---|
-| `--probe-url` | bounded URL probe; URL remains owner-private capability data |
+| `--dry-run` | validate policy and show the link-and-journal plan without calling rclone |
 
 `link` accepts only a normalized descendant of `/Hermes/public`. It has no
-v0.1 public-root override.
+v0.1 public-root override. It applies the same dangerous filename policy to the
+existing remote object, requires the same private `links_journal` for real
+execution, and returns only `public_url_fingerprint`; the raw capability is
+written only to the local owner journal.
 
 ### JSON успеха
 
@@ -724,12 +753,15 @@ hermes-mailcloud batch plan.json --json --yes
 }
 ```
 
-`batch --dry-run` validates paths and policy without rclone calls, journal
-writes, URL probes or mutations; it does not need `--yes`. A batch with any
-write operation requires `--yes` when executed. All operation outputs live at
-`result.items`. A partial execution returns process exit `11` with `ok: false`,
-`result.status: "partial_failure"`, and no top-level `error`; each item has
-exactly one of its own `result` or `error`.
+`batch --dry-run` validates the version-1 plan, every operation's fields, paths,
+and policy without rclone calls, journal writes, URL probes, or mutations; it does
+not need `--yes`. A batch with any write operation requires outer `--yes` when
+executed. `defaults.continue_on_error` is `false` unless set, so execution stops
+after the first failed operation; when true, later operations still run. All
+attempted operation outputs live at `result.items` in input order. A partial
+execution returns process exit `11` with `ok: false`, `result.status:
+"partial_failure"`, and no top-level `error`; each item has exactly one of its own
+`result` or `error`.
 
 ### JSON успеха
 

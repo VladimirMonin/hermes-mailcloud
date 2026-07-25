@@ -170,7 +170,15 @@ def _normalize_request_path(request: OperationRequest) -> str | None:
 
 def _planned_steps(operation: str) -> tuple[str, ...]:
     if operation == "publish":
-        return ("validate_local_file", "validate_public_root", "upload", "create_public_link")
+        return (
+            "validate_local_file",
+            "validate_public_root",
+            "upload",
+            "create_public_link",
+            "record_link_journal",
+        )
+    if operation == "link":
+        return ("validate_public_root", "create_public_link", "record_link_journal")
     if operation == "batch":
         return ("validate_batch", "execute_operations")
     if operation in WRITE_OPERATIONS:

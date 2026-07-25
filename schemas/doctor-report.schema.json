@@ -14,22 +14,29 @@
     }
   ],
   "$defs": {
-    "capability": {"type": "string", "enum": ["unknown", "supported", "unsupported"]},
+    "capability": {"type": "string", "enum": ["unknown", "supported", "unsupported", "failed"]},
     "doctorResult": {
       "type": "object",
       "additionalProperties": false,
       "required": ["mode", "checks", "capabilities"],
       "properties": {
         "mode": {"type": "string", "enum": ["read_only", "live"]},
-        "test_root": {"type": "string", "pattern": "^/TEST/[^/]+(?:/.*)?$"},
+        "test_roots": {
+          "type": "array",
+          "items": {"type": "string", "pattern": "^/TEST/hermes-mailcloud-[^/]+$"},
+          "uniqueItems": true
+        },
         "checks": {
           "type": "object",
           "additionalProperties": false,
           "properties": {
+            "config_loaded": {"type": "boolean"},
             "rclone_installed": {"type": "boolean"},
             "rclone_version": {"type": ["string", "null"]},
             "remote_configured": {"type": "boolean"},
+            "remote_listed": {"type": "boolean"},
             "cloud_access": {"type": "boolean"},
+            "about_available": {"type": "boolean"},
             "file_cycle": {"type": "boolean"},
             "public_link_create": {"type": "boolean"},
             "public_url_probe": {"type": "boolean"},
@@ -53,9 +60,17 @@
           "if": {"properties": {"mode": {"const": "read_only"}}, "required": ["mode"]},
           "then": {
             "properties": {
-              "test_root": false,
+              "test_roots": false,
               "checks": {
-                "required": ["rclone_installed", "rclone_version", "remote_configured", "cloud_access"],
+                "required": [
+                  "config_loaded",
+                  "rclone_installed",
+                  "rclone_version",
+                  "remote_configured",
+                  "remote_listed",
+                  "cloud_access",
+                  "about_available"
+                ],
                 "not": {
                   "anyOf": [
                     {"required": ["file_cycle"]},
@@ -72,14 +87,17 @@
         {
           "if": {"properties": {"mode": {"const": "live"}}, "required": ["mode"]},
           "then": {
-            "required": ["test_root"],
+            "required": ["test_roots"],
             "properties": {
               "checks": {
                 "required": [
+                  "config_loaded",
                   "rclone_installed",
                   "rclone_version",
                   "remote_configured",
+                  "remote_listed",
                   "cloud_access",
+                  "about_available",
                   "file_cycle",
                   "public_link_create",
                   "public_url_probe",
@@ -102,10 +120,13 @@
       "result": {
         "mode": "read_only",
         "checks": {
+          "config_loaded": true,
           "rclone_installed": true,
           "rclone_version": "1.74.3",
           "remote_configured": true,
-          "cloud_access": true
+          "remote_listed": true,
+          "cloud_access": true,
+          "about_available": true
         },
         "capabilities": {
           "file_ops": "unknown",
@@ -120,12 +141,15 @@
       "operation": "doctor",
       "result": {
         "mode": "live",
-        "test_root": "/TEST/hermes-mailcloud-20260724-01",
+        "test_roots": ["/TEST/hermes-mailcloud-20260724T235959Z-abc12345"],
         "checks": {
+          "config_loaded": true,
           "rclone_installed": true,
           "rclone_version": "1.74.3",
           "remote_configured": true,
+          "remote_listed": true,
           "cloud_access": true,
+          "about_available": true,
           "file_cycle": true,
           "public_link_create": true,
           "public_url_probe": true,

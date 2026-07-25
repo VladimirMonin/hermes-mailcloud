@@ -214,10 +214,12 @@ Windows:
 Формат:
 
 ```json
-{"ts":"2026-07-24T13:00:00Z","profile":"default","remote":"mailru:","operation":"publish","remote_path":"/Hermes/public/report.pdf","public_url_fingerprint":"sha256:...","trace_id":"..."}
+{"version":1,"recorded_at":"2026-07-24T13:00:00+00:00","operation":"publish","remote_path":"/Hermes/public/report.pdf","public_url":"[REDACTED]","public_url_fingerprint":"sha256:..."}
 ```
 
-Журнал не является источником истины Mail.ru. Это локальная история операций утилиты.
+`public_url` хранится только в owner-private журнале; в документации, JSON-ответах,
+логах и артефактах показывается только fingerprint или `[REDACTED]`. Журнал не
+является источником истины Mail.ru. Это локальная история операций утилиты.
 
 ## 9. Секреты в логах 🕵️
 
@@ -294,10 +296,13 @@ details. Its frozen v0.1 JSON result is:
   "result": {
     "mode": "read_only",
     "checks": {
+      "config_loaded": true,
       "rclone_installed": true,
       "rclone_version": "1.74.3",
       "remote_configured": true,
-      "cloud_access": true
+      "remote_listed": true,
+      "cloud_access": true,
+      "about_available": true
     },
     "capabilities": {
       "file_ops": "unknown",
@@ -308,7 +313,10 @@ details. Its frozen v0.1 JSON result is:
 }
 ```
 
-Но `doctor` не должен показывать секреты.
+Но `doctor` не должен показывать секреты. Default mode performs only the
+documented metadata calls. The separately mutating `doctor --json --live --yes`
+uses fresh generated `/TEST/hermes-mailcloud-*` roots and reports only their
+paths, cleanup state, and redacted capability evidence.
 
 ## 13. Ротация app password 🔄
 

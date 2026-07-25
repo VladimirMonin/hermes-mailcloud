@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "defaults": {
+    "continue_on_error": false
+  },
+  "operations": [
+    {
+      "op": "mkdir",
+      "remote_path": "/Hermes/private/reports"
+    },
+    {
+      "op": "link",
+      "remote_path": "/Hermes/public/report.txt"
+    }
+  ]
+}

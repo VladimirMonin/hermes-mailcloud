@@ -232,6 +232,11 @@ hermes-mailcloud resolve "https://cloud.mail.ru/public/..." --json
 hermes-mailcloud batch plan.json --json --dry-run
 ```
 
+The plan is strict `version: 1` JSON: each `operations[]` item is discriminated
+by `op`, so fields from one operation cannot silently apply to another. Dry-run
+validates every item without launching rclone; agents can then inspect the
+ordered `result.items` plan before confirming execution.
+
 Потом:
 
 ```bash

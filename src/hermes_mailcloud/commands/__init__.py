@@ -2,7 +2,8 @@
 
 from .mkdir import MkdirCommand
 from .move_copy import MoveCopyCommands
+from .public import PublicCommands
 from .read import ReadCommands
 from .transfer import TransferCommands
 
-__all__ = ["MkdirCommand", "MoveCopyCommands", "ReadCommands", "TransferCommands"]
+__all__ = ["MkdirCommand", "MoveCopyCommands", "PublicCommands", "ReadCommands", "TransferCommands"]

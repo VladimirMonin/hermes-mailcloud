@@ -349,10 +349,13 @@ def test_read_only_doctor_report_has_no_mutating_checks() -> None:
             "result": {
                 "mode": "read_only",
                 "checks": {
+                    "config_loaded": True,
                     "rclone_installed": True,
                     "rclone_version": "1.74.3",
                     "remote_configured": True,
+                    "remote_listed": True,
                     "cloud_access": True,
+                    "about_available": True,
                 },
                 "capabilities": {
                     "file_ops": "unknown",

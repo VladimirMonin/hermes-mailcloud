@@ -1,0 +1,35 @@
+{
+  "status": "completed",
+  "total": 2,
+  "succeeded": 2,
+  "failed": 0,
+  "items": [
+    {
+      "index": 0,
+      "operation": "mkdir",
+      "ok": true,
+      "result": {
+        "remote_path": "/Hermes/private/reports",
+        "dry_run": true,
+        "plan": [
+          {"step": "validate_arguments", "status": "planned"},
+          {"step": "execute", "status": "planned"}
+        ]
+      }
+    },
+    {
+      "index": 1,
+      "operation": "link",
+      "ok": true,
+      "result": {
+        "remote_path": "/Hermes/public/report.txt",
+        "dry_run": true,
+        "plan": [
+          {"step": "validate_public_root", "status": "planned"},
+          {"step": "create_public_link", "status": "planned"},
+          {"step": "record_link_journal", "status": "planned"}
+        ]
+      }
+    }
+  ]
+}
