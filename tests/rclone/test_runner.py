@@ -1,0 +1,149 @@
+"""Offline subprocess-boundary tests using a deterministic fake executable."""
+
+from __future__ import annotations
+
+import json
+import os
+import sys
+import time
+from pathlib import Path
+
+import pytest
+
+from hermes_mailcloud.core.errors import ErrorKind
+from hermes_mailcloud.rclone.parser import RcloneParseError, parse_lsjson
+from hermes_mailcloud.rclone.runner import (
+    RcloneResult,
+    RcloneRunner,
+    RcloneRunnerError,
+    map_rclone_error,
+)
+
+ROOT = Path(__file__).parent
+FAKE_RCLONE = ROOT / "fake_rclone.py"
+
+
+def _runner(*, max_capture_bytes: int = 1024) -> RcloneRunner:
+    return RcloneRunner(
+        (sys.executable, str(FAKE_RCLONE)),
+        environment={"PATH": os.environ.get("PATH", "")},
+        max_capture_bytes=max_capture_bytes,
+    )
+
+
+def test_runner_uses_literal_argv_and_a_deterministic_minimal_environment() -> None:
+    result = _runner().run(["success", "literal;not-a-shell-command"], timeout_seconds=1)
+
+    assert result.returncode == 0
+    assert result.stderr == ""
+    payload = json.loads(result.stdout)
+    assert payload["arguments"] == ["literal;not-a-shell-command"]
+    assert payload["environment"] == {
+        "LANG": "C",
+        "LC_ALL": "C",
+        "TZ": "UTC",
+        "NO_COLOR": "1",
+        "TERM": "dumb",
+    }
+
+
+def test_runner_maps_nonzero_fake_output_without_serializing_raw_diagnostics() -> None:
+    result = _runner().run(["error"], timeout_seconds=1)
+    error = map_rclone_error(result)
+
+    assert result.returncode == 17
+    assert error.kind is ErrorKind.NETWORK_ERROR
+    rendered = json.dumps(error.to_payload())
+    assert "runner-secret-sentinel" not in rendered
+    assert error.details == {"backend_exit_code": 17}
+
+
+@pytest.mark.parametrize(
+    ("diagnostic", "expected_kind"),
+    [
+        ("didn't find section in config file", ErrorKind.REMOTE_NOT_CONFIGURED),
+        ("permission denied", ErrorKind.ACCESS_DENIED),
+        ("file exists", ErrorKind.CONFLICT),
+        ("operation not supported", ErrorKind.BACKEND_UNSUPPORTED),
+        ("object not found", ErrorKind.NOT_FOUND),
+        ("unclassified provider failure", ErrorKind.UNKNOWN_ERROR),
+    ],
+)
+def test_runner_error_mapper_uses_frozen_error_kinds(
+    diagnostic: str, expected_kind: ErrorKind
+) -> None:
+    error = map_rclone_error(RcloneResult(17, "", diagnostic, duration_ms=0))
+
+    assert error.kind is expected_kind
+    assert error.details == {"backend_exit_code": 17}
+
+
+def test_runner_enforces_timeout_with_a_typed_error() -> None:
+    with pytest.raises(RcloneRunnerError) as caught:
+        _runner().run(["timeout"], timeout_seconds=0.05)
+
+    assert caught.value.error.kind is ErrorKind.TIMEOUT
+    assert caught.value.error.exit_code == 14
+    assert "timed out" in caught.value.error.message
+
+
+@pytest.mark.skipif(
+    os.name != "posix" or not Path("/proc").is_dir(),
+    reason="process-group semantics are exercised on Linux",
+)
+def test_runner_timeout_kills_descendants_holding_output_pipes_promptly(tmp_path: Path) -> None:
+    pid_path = tmp_path / "descendant.pid"
+    started = time.monotonic()
+
+    with pytest.raises(RcloneRunnerError) as caught:
+        _runner().run(["timeout-descendant", str(pid_path)], timeout_seconds=0.25)
+
+    elapsed = time.monotonic() - started
+    descendant_pid = int(pid_path.read_text(encoding="ascii"))
+    assert caught.value.error.kind is ErrorKind.TIMEOUT
+    assert elapsed < 1.5
+    assert not _process_is_running(descendant_pid)
+
+
+@pytest.mark.skipif(
+    os.name != "posix" or not Path("/proc").is_dir(),
+    reason="process-group semantics are exercised on Linux",
+)
+def test_runner_timeout_bounds_reader_drain_after_parent_exit(tmp_path: Path) -> None:
+    pid_path = tmp_path / "descendant.pid"
+    started = time.monotonic()
+
+    with pytest.raises(RcloneRunnerError) as caught:
+        _runner().run(["exit-with-descendant", str(pid_path)], timeout_seconds=0.1)
+
+    elapsed = time.monotonic() - started
+    descendant_pid = int(pid_path.read_text(encoding="ascii"))
+    assert caught.value.error.kind is ErrorKind.TIMEOUT
+    assert elapsed < 1.5
+    assert not _process_is_running(descendant_pid)
+
+
+def test_fake_malformed_output_exercises_the_parser_failure_boundary() -> None:
+    result = _runner().run(["malformed"], timeout_seconds=1)
+
+    with pytest.raises(RcloneParseError) as caught:
+        parse_lsjson(result.stdout, root="/Hermes")
+
+    assert caught.value.error.kind is ErrorKind.PARSE_ERROR
+
+
+def test_runner_bounds_both_streams_and_marks_truncation() -> None:
+    result = _runner(max_capture_bytes=31).run(["overflow"], timeout_seconds=1)
+
+    assert len(result.stdout.encode("utf-8")) <= 31
+    assert len(result.stderr.encode("utf-8")) <= 31
+    assert result.stdout_truncated is True
+    assert result.stderr_truncated is True
+
+
+def _process_is_running(pid: int) -> bool:
+    try:
+        state = Path(f"/proc/{pid}/stat").read_text(encoding="ascii").split()[2]
+    except FileNotFoundError:
+        return False
+    return state != "Z"

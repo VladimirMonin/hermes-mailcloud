@@ -1,0 +1,15 @@
+[
+  {
+    "Path": "private",
+    "Name": "private",
+    "IsDir": true,
+    "ModTime": "2026-07-25T00:00:00Z"
+  },
+  {
+    "Path": "private/notes.txt",
+    "Name": "notes.txt",
+    "IsDir": false,
+    "Size": 17,
+    "ModTime": "2026-07-25T01:02:03Z"
+  }
+]

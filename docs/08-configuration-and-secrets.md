@@ -102,6 +102,11 @@ timeout_seconds = 120
 retries = 0  # write operations are never retried automatically in v0.1
 ```
 
+The implemented configuration core accepts only these profile fields. It rejects
+secret-bearing or unsupported fields (including `password`), requires the
+frozen `/Hermes/public` value, and does not permit a profile to disable the
+confirmation or dangerous-name policies.
+
 ## 4. Профили 🧩
 
 Профили нужны для разных аккаунтов или разных сценариев.
