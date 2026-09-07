@@ -16,8 +16,10 @@
 - [`07-agent-integration.md`](07-agent-integration.md) — proposed agent-facing behavior.
 - [`08-configuration-and-secrets.md`](08-configuration-and-secrets.md) — configuration and secret boundaries.
 - [`09-known-risks.md`](09-known-risks.md) — known risks.
-- [`10-v0.1-release-notes.md`](10-v0.1-release-notes.md) — supported surface, package and CI release gates.
-- [`11-local-installation.md`](11-local-installation.md) — stable `uv tool` installation, student setup, local configuration, and optional Hermes skill.
+- [`10-v0.1-release-notes.md`](10-v0.1-release-notes.md) — current private-candidate status and future owner-gated package, tag, artifact, GitHub Release, PyPI, Trusted Publishing, and CI gates.
+- [`11-local-installation.md`](11-local-installation.md) — future-conditional PyPI/source/skill routes plus local development, configuration, and update policy.
+- [`../LICENSE`](../LICENSE) — project MIT license carried by the distribution.
+- [`../THIRD_PARTY_NOTICES.md`](../THIRD_PARTY_NOTICES.md) — third-party notices, license sources, and the exact locked runtime ledger.
 - [`../skills/mailru-cloud/SKILL.md`](../skills/mailru-cloud/SKILL.md) — compact agent router for Mail.ru Cloud requests.
 - [`adr/`](adr/) — architectural decision records.
 - [`agent-workflow.md`](agent-workflow.md) — durable agent-instruction maintenance.

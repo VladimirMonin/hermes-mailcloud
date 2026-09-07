@@ -1,103 +1,75 @@
-# Third-Party Notices — Hermes MailCloud
+# Third-Party Notices — Hermes MailCloud 0.1.0a0
 
-> Статус: draft  
-> Дата: 2026-07-04  
-> Проект: `hermes-mailcloud`
+This notice ledger covers the `hermes-mailcloud` 0.1.0a0 distribution. It is a
+compliance record, not legal advice. The project is MIT-licensed under
+[`LICENSE`](LICENSE).
 
-## 1. Назначение документа
+## Locked Python runtime ledger
 
-Этот файл фиксирует сторонние проекты, документацию и исследовательские источники, которые учитывались при проектировании `hermes-mailcloud`.
+The following is the exact runtime dependency ledger from committed `uv.lock`.
+`resolver-only` means that the dependency is selected by the Python package
+resolver and is not vendored into this repository. The CI release gate evaluates
+environment markers in this ledger and in
+`uv export --locked --no-dev --no-emit-project --no-hashes`, then requires both
+maps to equal the clean installed runtime map.
 
-Главный принцип:
-
-> В v0.1 проект использует `rclone` как внешний CLI-бинарник и не включает исходный код сторонних клиентов Mail.ru Cloud внутрь репозитория.
-
-## 2. Runtime / external tools
-
-| Компонент | Роль | Лицензия | Использование в проекте |
-|---|---|---|---|
-| `rclone/rclone` | Основной backend v0.1 через subprocess | MIT | Внешний бинарник, не vendored-код |
-
-`rclone` может быть установлен отдельно пользователем или средой, где работает агент. Проект `hermes-mailcloud` не обязан распространять бинарник `rclone` вместе с собой.
-
-Если в будущем будет принято решение поставлять `rclone` внутри дистрибутива, нужно отдельно обновить этот документ, добавить upstream license notice и проверить формат распространения.
-
-## 3. Research references
-
-| Проект | Роль | Лицензия | Разрешённое использование |
-|---|---|---|---|
-| `rclone/rclone` | Живой production-grade reference для Mail.ru Cloud backend и public links | MIT | Можно использовать как внешний backend; код можно изучать; копирование возможно только с сохранением notice |
-| `scharfff/mailrucloud` | WebDAV-oriented Python CLI reference | MIT | Можно изучать; при копировании существенных частей сохранить notice |
-| `kireevmp/mailru-cloud-api` | Документация reverse-engineered API v2 | MIT | Можно использовать как research/reference; при копировании сохранить notice |
-| `mad-gooze/PyMailCloud` | Исторический reverse-engineered Python-клиент | GPL-2.0 | Только research reference; код не копировать |
-
-## 4. GPL policy
-
-`PyMailCloud` распространяется под GPL-2.0. Поэтому для проекта `hermes-mailcloud` принимается правило:
-
-```text
-Не копировать код, классы, функции, структуру реализации или существенные фрагменты PyMailCloud.
+<!-- hmc-runtime-ledger:start -->
+```json
+[
+  {"name": "annotated-doc", "version": "0.0.4"},
+  {"name": "colorama", "version": "0.4.6", "marker": "sys_platform == 'win32'"},
+  {"name": "markdown-it-py", "version": "4.2.0"},
+  {"name": "mdurl", "version": "0.1.2"},
+  {"name": "pygments", "version": "2.20.0"},
+  {"name": "rich", "version": "14.3.4"},
+  {"name": "shellingham", "version": "1.5.4"},
+  {"name": "typer", "version": "0.26.8"}
+]
 ```
+<!-- hmc-runtime-ledger:end -->
 
-Разрешено:
+| Resolver-only component | Exact version / marker | SPDX license | Pinned license source |
+|---|---:|---|---|
+| [annotated-doc](https://pypi.org/project/annotated-doc/0.0.4/) | `0.0.4` | MIT | [upstream LICENSE](https://github.com/fastapi/annotated-doc/blob/0.0.4/LICENSE) |
+| [colorama](https://pypi.org/project/colorama/0.4.6/) | `0.4.6`; Windows only | BSD-3-Clause | [upstream LICENSE.txt](https://github.com/tartley/colorama/blob/0.4.6/LICENSE.txt) |
+| [markdown-it-py](https://pypi.org/project/markdown-it-py/4.2.0/) | `4.2.0` | MIT | [upstream LICENSE](https://github.com/executablebooks/markdown-it-py/blob/v4.2.0/LICENSE) |
+| [mdurl](https://pypi.org/project/mdurl/0.1.2/) | `0.1.2` | MIT | [upstream LICENSE](https://github.com/executablebooks/mdurl/blob/0.1.2/LICENSE) |
+| [Pygments](https://pypi.org/project/Pygments/2.20.0/) | `2.20.0` | BSD-2-Clause | [upstream LICENSE](https://github.com/pygments/pygments/blob/2.20.0/LICENSE) |
+| [Rich](https://pypi.org/project/rich/14.3.4/) | `14.3.4` | MIT | [upstream LICENSE](https://github.com/Textualize/rich/blob/v14.3.4/LICENSE) |
+| [Shellingham](https://pypi.org/project/shellingham/1.5.4/) | `1.5.4` | ISC | [upstream LICENSE](https://github.com/sarugaku/shellingham/blob/1.5.4/LICENSE) |
+| [Typer](https://pypi.org/project/typer/0.26.8/) | `0.26.8` | MIT | [upstream LICENSE](https://github.com/fastapi/typer/blob/0.26.8/LICENSE) |
 
-- читать проект как исторический источник сведений о поведении API;
-- фиксировать в research-документах факт существования endpoint-ов;
-- писать собственную реализацию clean-room способом;
-- ссылаться на проект как на внешний источник.
+Typer 0.26.8 vendors Click source. It is not a separate resolver package in the
+ledger, but its bundled [Click `LICENSE.txt`](https://github.com/fastapi/typer/blob/0.26.8/typer/_click/LICENSE.txt)
+is BSD-3-Clause and remains an applicable notice for the Typer wheel.
 
-Запрещено без отдельного юридического/лицензионного решения:
+MIT, BSD-2-Clause, BSD-3-Clause, and ISC permit commercial use and contain no
+royalty obligation. Their material redistribution duties differ: retain the
+copyright and license/disclaimer text for MIT and ISC; retain the copyright,
+conditions, and disclaimer for both BSD licenses; and do not use contributor
+names to endorse a derived product under BSD-3-Clause. This project preserves
+these notices in this ledger and must update it before adding, removing, or
+vendoring a runtime dependency.
 
-- вставлять GPL-код в репозиторий;
-- адаптировать GPL-функции с минимальными изменениями;
-- vendor-ить GPL-пакет;
-- строить распространяемую производную работу на основе GPL-кода, если проект должен оставаться MIT.
+## External runtime boundary
 
-## 5. MIT references policy
+[`rclone` v1.74.4](https://github.com/rclone/rclone/tree/v1.74.4) is MIT-licensed
+([COPYING](https://github.com/rclone/rclone/blob/v1.74.4/COPYING)) and is invoked
+only as a separately installed external subprocess. It is not a Python resolver
+dependency, vendored source tree, or bundled executable in this distribution.
 
-Код из MIT-проектов можно использовать только при соблюдении условий лицензии:
+## Research-only sources
 
-1. Сохранить copyright notice.
-2. Сохранить permission notice.
-3. Указать источник в этом файле.
-4. Желательно добавить комментарий в коде рядом с адаптированным фрагментом.
+The following projects may be consulted as research references only. Their code
+is not shipped by `hermes-mailcloud` and they are not runtime dependencies:
 
-На старте проекта предпочтение отдаётся clean-room реализации и вызову `rclone` через subprocess.
+| Project | License | Allowed role |
+|---|---|---|
+| [`scharfff/mailrucloud`](https://github.com/scharfff/mailrucloud) | MIT | WebDAV-oriented behavioral research; preserve notices before copying any material. |
+| [`kireevmp/mailru-cloud-api`](https://github.com/kireevmp/mailru-cloud-api) | MIT | Reverse-engineered API research; preserve notices before copying any material. |
+| [`mad-gooze/PyMailCloud`](https://github.com/mad-gooze/PyMailCloud) | GPL-2.0 | Historical research only; its GPL-2.0 code is not shipped, vendored, or adapted here. |
 
-## 6. Official documentation references
-
-Официальные источники Mail.ru:
-
-- WebDAV-доступ к Облаку Mail.ru: `https://help.mail.ru/cloud/desktop/webdav/`
-- Публичные ссылки и доступ по ссылке: `https://help.mail.ru/cloud/actions/share/`
-- Лимиты и особенности ссылок: `https://help.mail.ru/cloud/faq/share/`
-- Пароли внешних приложений: `https://help.mail.ru/mail/login/mailer/`
-
-Документация rclone:
-
-- Mail.ru Cloud backend: `https://rclone.org/mailru/`
-- Команда `rclone link`: `https://rclone.org/commands/rclone_link/`
-- RC API, если будет рассматриваться в будущих версиях: `https://rclone.org/rc/`
-
-## 7. Current decision
-
-Для v0.1:
-
-```text
-Use rclone as external subprocess backend.
-Do not fork rclone.
-Do not vendor third-party Mail.ru Cloud clients.
-Do not copy GPL code.
-Keep all reverse-engineered behavior behind probe scripts and ADRs.
-```
-
-## 8. When this file must be updated
-
-Обновить этот файл нужно, если проект:
-
-- начнёт распространять `rclone` бинарником;
-- скопирует код из MIT-проекта;
-- добавит private API implementation;
-- добавит WebDAV-native backend на основе стороннего клиента;
-- поменяет лицензию проекта;
-- решит использовать GPL-зависимость.
+Version 0.1 uses the external rclone subprocess boundary and does not fork or
+vendor a third-party Mail.ru client. A future decision to bundle rclone, copy
+third-party implementation code, add a private API backend, or add a GPL
+dependency requires a separate license review and an updated ledger.

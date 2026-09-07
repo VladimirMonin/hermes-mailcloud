@@ -30,24 +30,135 @@ jobs:
         run: uv run pytest -q -m "not live"
       - name: Build distributions
         run: uv build
-      - name: Smoke-test the installed wheel in a clean environment
+      - name: Assert release metadata and archive payloads
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from email.parser import BytesParser
+          from pathlib import Path
+          import tarfile
+          import zipfile
+
+          expected_urls = {
+              "Homepage": "https://github.com/VladimirMonin/hermes-mailcloud",
+              "Documentation": "https://github.com/VladimirMonin/hermes-mailcloud/tree/v0.1.0a0/docs",
+              "Issues": "https://github.com/VladimirMonin/hermes-mailcloud/issues",
+              "Source": "https://github.com/VladimirMonin/hermes-mailcloud",
+          }
+          dist = Path("dist")
+          wheels = list(dist.glob("hermes_mailcloud-0.1.0a0-*.whl"))
+          sdists = list(dist.glob("hermes_mailcloud-0.1.0a0.tar.gz"))
+          assert len(wheels) == len(sdists) == 1, (wheels, sdists)
+
+          with zipfile.ZipFile(wheels[0]) as archive:
+              names = set(archive.namelist())
+              metadata_name = next(name for name in names if name.endswith(".dist-info/METADATA"))
+              metadata = BytesParser().parsebytes(archive.read(metadata_name))
+              assert metadata["Name"] == "hermes-mailcloud"
+              assert metadata["Version"] == "0.1.0a0"
+              assert metadata["License-Expression"] == "MIT"
+              assert set(metadata.get_all("License-File", [])) == {
+                  "LICENSE",
+                  "THIRD_PARTY_NOTICES.md",
+              }
+              urls = dict(value.split(", ", 1) for value in metadata.get_all("Project-URL", []))
+              assert urls == expected_urls
+              assert any(name.endswith(".dist-info/licenses/LICENSE") for name in names)
+              assert any(
+                  name.endswith(".dist-info/licenses/THIRD_PARTY_NOTICES.md") for name in names
+              )
+
+          with tarfile.open(sdists[0], "r:gz") as archive:
+              names = set(archive.getnames())
+              assert any(name.endswith("/LICENSE") for name in names)
+              assert any(name.endswith("/THIRD_PARTY_NOTICES.md") for name in names)
+          PY
+      - name: Smoke-test constrained wheel and sdist installs in clean environments
         shell: bash
         run: |
           set -euo pipefail
           smoke_dir="$(mktemp -d)"
           trap 'rm -rf "$smoke_dir"' EXIT
-          uv venv "$smoke_dir/venv" --python 3.12
-          uv pip install --python "$smoke_dir/venv/bin/python" dist/*.whl
-          smoke_env=(env -i PATH="$PATH" HOME="$smoke_dir/home" XDG_CONFIG_HOME="$smoke_dir/config")
-          "${smoke_env[@]}" "$smoke_dir/venv/bin/hermes-mailcloud" --help
-          "${smoke_env[@]}" "$smoke_dir/venv/bin/hermes-mailcloud" version
-          "${smoke_env[@]}" "$smoke_dir/venv/bin/hermes-mailcloud" --json doctor > "$smoke_dir/doctor.json"
-          "$smoke_dir/venv/bin/python" - "$smoke_dir/doctor.json" <<'PY'
+          uv export --locked --no-dev --no-emit-project --no-hashes > "$smoke_dir/runtime-constraints.txt"
+          uv run python - "$smoke_dir/runtime-constraints.txt" THIRD_PARTY_NOTICES.md \
+            "$smoke_dir/runtime-map.json" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          from packaging.markers import default_environment
+          from packaging.requirements import Requirement
+          from packaging.utils import canonicalize_name
+
+          constraints_path, notices_path, output_path = map(Path, sys.argv[1:])
+          environment = default_environment()
+
+          def normalized(requirements):
+              resolved = {}
+              for raw in requirements:
+                  line = raw.strip()
+                  if not line or line.startswith(("#", "-")):
+                      continue
+                  requirement = Requirement(line)
+                  if requirement.marker and not requirement.marker.evaluate(environment):
+                      continue
+                  specifiers = list(requirement.specifier)
+                  assert len(specifiers) == 1 and specifiers[0].operator == "==", requirement
+                  name = canonicalize_name(requirement.name)
+                  assert name not in resolved, name
+                  resolved[name] = specifiers[0].version
+              return resolved
+
+          constraints = normalized(constraints_path.read_text(encoding="utf-8").splitlines())
+          notices = notices_path.read_text(encoding="utf-8")
+          start = "<!-- hmc-runtime-ledger:start -->"
+          end = "<!-- hmc-runtime-ledger:end -->"
+          ledger_block = notices.split(start, 1)[1].split(end, 1)[0]
+          ledger_json = ledger_block.split("```json", 1)[1].split("```", 1)[0]
+          ledger = normalized(
+              f"{entry['name']}=={entry['version']}"
+              + (f" ; {entry['marker']}" if entry.get("marker") else "")
+              for entry in json.loads(ledger_json)
+          )
+          assert constraints == ledger, {"constraints": constraints, "ledger": ledger}
+          output_path.write_text(json.dumps(constraints, sort_keys=True), encoding="utf-8")
+          PY
+          for artifact in dist/*.whl dist/*.tar.gz; do
+            case "$artifact" in
+              *.whl) label="wheel" ;;
+              *.tar.gz) label="sdist" ;;
+              *) exit 1 ;;
+            esac
+            venv="$smoke_dir/$label-venv"
+            uv venv "$venv" --python 3.12
+            uv pip install --python "$venv/bin/python" --constraints \
+              "$smoke_dir/runtime-constraints.txt" --exact --strict "$artifact"
+            smoke_env=(env -i PATH="$PATH" HOME="$smoke_dir/$label-home" XDG_CONFIG_HOME="$smoke_dir/$label-config")
+            "${smoke_env[@]}" "$venv/bin/hermes-mailcloud" --help
+            "${smoke_env[@]}" "$venv/bin/hermes-mailcloud" version
+            "${smoke_env[@]}" "$venv/bin/hermes-mailcloud" --json version > "$smoke_dir/$label-version.json"
+            "${smoke_env[@]}" "$venv/bin/hermes-mailcloud" --json doctor > "$smoke_dir/$label-doctor.json"
+            "$venv/bin/python" - "$smoke_dir/runtime-map.json" "$smoke_dir/$label-version.json" \
+              "$smoke_dir/$label-doctor.json" <<'PY'
+          from importlib.metadata import distributions
           import json
           import sys
 
-          payload = json.load(open(sys.argv[1], encoding="utf-8"))
-          assert payload["ok"] is True
-          assert payload["operation"] == "doctor"
-          assert payload["result"]["mode"] == "read_only"
+          expected = json.load(open(sys.argv[1], encoding="utf-8"))
+          version = json.load(open(sys.argv[2], encoding="utf-8"))
+          doctor = json.load(open(sys.argv[3], encoding="utf-8"))
+          installed = {
+              distribution.metadata["Name"].lower().replace("_", "-"): distribution.version
+              for distribution in distributions()
+              if distribution.metadata["Name"].lower().replace("_", "-") != "hermes-mailcloud"
+          }
+          assert installed == expected, {"expected": expected, "installed": installed}
+          assert version["ok"] is True
+          assert version["operation"] == "version"
+          assert version["result"]["version"] == "0.1.0a0"
+          assert doctor["ok"] is True
+          assert doctor["operation"] == "doctor"
+          assert doctor["result"]["mode"] == "read_only"
           PY
+          done

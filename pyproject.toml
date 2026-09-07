@@ -1,17 +1,18 @@
 [project]
 name = "hermes-mailcloud"
 version = "0.1.0a0"
-description = "Agent CLI for Mail.ru Cloud — rclone-backed, JSON-first, safety-aware"
+description = "Unofficial, rclone-backed CLI for Mail.ru Cloud"
 readme = "README.md"
 license = "MIT"
+license-files = ["LICENSE", "THIRD_PARTY_NOTICES.md"]
 requires-python = ">=3.12"
 authors = [
     { name = "Vladimir" },
 ]
 keywords = ["mailru", "cloud", "rclone", "cli", "agent"]
 classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
     "Environment :: Console",
-    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Topic :: Internet :: WWW/HTTP",
@@ -20,6 +21,12 @@ dependencies = [
     "typer>=0.12,<1.0",
     "rich>=13,<15",
 ]
+
+[project.urls]
+Homepage = "https://github.com/VladimirMonin/hermes-mailcloud"
+Documentation = "https://github.com/VladimirMonin/hermes-mailcloud/tree/v0.1.0a0/docs"
+Issues = "https://github.com/VladimirMonin/hermes-mailcloud/issues"
+Source = "https://github.com/VladimirMonin/hermes-mailcloud"
 
 [project.scripts]
 hermes-mailcloud = "hermes_mailcloud.cli:app"
