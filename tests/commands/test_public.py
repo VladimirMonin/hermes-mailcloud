@@ -3,9 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
-import stat as stat_module
-import subprocess
 import sys
 from collections.abc import Sequence
 from dataclasses import dataclass, field
@@ -15,12 +12,20 @@ from typing import cast
 import pytest
 
 import hermes_mailcloud.journal as journal_module
+from hermes_mailcloud._platform import PrivateStorageError
 from hermes_mailcloud.commands.public import PublicCommands
 from hermes_mailcloud.config import ResolvedConfig
 from hermes_mailcloud.core.errors import ErrorKind, MailCloudError
-from hermes_mailcloud.journal import MAX_JOURNAL_BYTES, JournalError
+from hermes_mailcloud.journal import MAX_JOURNAL_BYTES, JournalError, LinkJournal
 from hermes_mailcloud.rclone.parser import PublicLink
 from hermes_mailcloud.rclone.runner import RcloneResult
+
+_TESTS_ROOT = next(parent for parent in Path(__file__).resolve().parents if parent.name == "tests")
+if str(_TESTS_ROOT) not in sys.path:
+    sys.path.insert(0, str(_TESTS_ROOT))
+
+from helpers.cli_fake import CliFakeHarness  # noqa: E402
+from helpers.journal_worker import broaden_capability, make_reparse_link  # noqa: E402
 
 PUBLIC_URL = "https://cloud.mail.ru/public/public-command-capability/path"
 
@@ -57,12 +62,24 @@ def _config(*, journal: Path | None, remote: str | None = "mailru:") -> Resolved
     )
 
 
+def _journal_path(root: Path) -> Path:
+    return root / "private-state" / "links.jsonl"
+
+
+def _lock_path(journal: Path) -> Path:
+    return journal.with_name(f".{journal.name}.lock")
+
+
+def _prepare_private_journal(journal: Path) -> None:
+    LinkJournal(journal).record("publish", "/Hermes/public/seed.txt", PublicLink(PUBLIC_URL))
+
+
 def test_publish_orders_upload_link_and_private_journal_after_policy_validation(
     tmp_path: Path,
 ) -> None:
     source = tmp_path / "report.txt"
     source.write_text("public", encoding="utf-8")
-    journal = tmp_path / "links.jsonl"
+    journal = _journal_path(tmp_path)
     backend = RecordingBackend()
 
     result = PublicCommands(backend, _config(journal=journal), timeout_seconds=9).publish(
@@ -82,11 +99,13 @@ def test_publish_orders_upload_link_and_private_journal_after_policy_validation(
         (("copyto", str(source), "mailru:/Hermes/public/report.txt", "--immutable"), 9),
         (("link", "mailru:/Hermes/public/report.txt"), 9),
     ]
-    journal_payload = json.loads(journal.read_text(encoding="utf-8"))
-    assert journal_payload["operation"] == "publish"
-    assert journal_payload["remote_path"] == "/Hermes/public/report.txt"
-    assert journal_payload["public_url"] == PUBLIC_URL
-    assert journal_payload["public_url_fingerprint"] == result["public_url_fingerprint"]
+    journal_payloads = [
+        json.loads(line) for line in journal.read_text(encoding="utf-8").splitlines()
+    ]
+    assert [payload["operation"] for payload in journal_payloads] == ["publish"]
+    assert journal_payloads[0]["remote_path"] == "/Hermes/public/report.txt"
+    assert journal_payloads[0]["public_url"] == PUBLIC_URL
+    assert journal_payloads[0]["public_url_fingerprint"] == result["public_url_fingerprint"]
     assert PUBLIC_URL not in json.dumps(result)
 
 
@@ -94,7 +113,7 @@ def test_link_applies_public_path_and_dangerous_remote_object_policy_before_rclo
     tmp_path: Path,
 ) -> None:
     backend = RecordingBackend()
-    command = PublicCommands(backend, _config(journal=tmp_path / "links.jsonl"), timeout_seconds=60)
+    command = PublicCommands(backend, _config(journal=_journal_path(tmp_path)), timeout_seconds=60)
 
     with pytest.raises(MailCloudError) as outside:
         command.link("/Hermes/private/report.txt")
@@ -114,7 +133,7 @@ def test_publish_requires_confirmation_and_journal_before_any_cloud_call(tmp_pat
     source.write_text("public", encoding="utf-8")
     backend = RecordingBackend()
     configured = PublicCommands(
-        backend, _config(journal=tmp_path / "links.jsonl"), timeout_seconds=60
+        backend, _config(journal=_journal_path(tmp_path)), timeout_seconds=60
     )
 
     with pytest.raises(MailCloudError) as unconfirmed:
@@ -132,39 +151,35 @@ def test_publish_requires_confirmation_and_journal_before_any_cloud_call(tmp_pat
 def _make_journal_preflight_fail(
     journal: Path, failure: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    if failure == "unreadable_journal":
+        _prepare_private_journal(journal)
+
+        def deny_read(*_args: object, **_kwargs: object) -> bytes:
+            raise PrivateStorageError("local link journal could not be read safely")
+
+        monkeypatch.setattr(journal_module, "_read_private_journal", deny_read)
+        return
+
+    _prepare_private_journal(journal)
+
     if failure == "insecure_lock":
-        lock_path = journal.with_name(f".{journal.name}.lock")
-        lock_path.write_bytes(b"")
-        lock_path.chmod(0o644)
+        broaden_capability(_lock_path(journal))
         return
     if failure == "symlink_lock":
-        journal.with_name(f".{journal.name}.lock").symlink_to("untrusted-lock-target")
+        lock = _lock_path(journal)
+        lock.unlink()
+        target = journal.parent / "link-target"
+        target.mkdir()
+        try:
+            make_reparse_link(lock, target)
+        except OSError:
+            pytest.skip("creating a test reparse link is unavailable in this environment")
         return
     if failure == "invalid_permission_journal":
-        journal.write_bytes(b'{"version":1}\n')
-        journal.chmod(0o644)
+        broaden_capability(journal)
         return
     if failure == "oversized_journal":
         journal.write_bytes(b"x" * (MAX_JOURNAL_BYTES + 1))
-        journal.chmod(0o600)
-        return
-    if failure == "unreadable_journal":
-        journal.write_bytes(b'{"version":1}\n')
-        journal.chmod(0o600)
-        original_open = journal_module.os.open
-
-        def deny_journal_open(
-            candidate: str | Path,
-            flags: int,
-            mode: int = 0o777,
-            *,
-            dir_fd: int | None = None,
-        ) -> int:
-            if Path(candidate) == journal:
-                raise PermissionError("journal read denied")
-            return original_open(candidate, flags, mode, dir_fd=dir_fd)
-
-        monkeypatch.setattr(journal_module.os, "open", deny_journal_open)
         return
     raise AssertionError(f"unknown journal preflight failure: {failure}")
 
@@ -185,7 +200,7 @@ def test_public_operations_fail_closed_on_deterministic_journal_preflight_errors
 ) -> None:
     source = tmp_path / "report.txt"
     source.write_text("public", encoding="utf-8")
-    journal = tmp_path / "links.jsonl"
+    journal = _journal_path(tmp_path)
     _make_journal_preflight_fail(journal, failure, monkeypatch)
     backend = RecordingBackend()
     command = PublicCommands(backend, _config(journal=journal), timeout_seconds=9)
@@ -197,6 +212,38 @@ def test_public_operations_fail_closed_on_deterministic_journal_preflight_errors
             command.link("/Hermes/public/report.txt")
 
     assert backend.calls == []
+
+
+@pytest.mark.parametrize("operation", ["publish", "link"])
+def test_backend_success_then_journal_failure_is_safe_and_never_retried(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, operation: str
+) -> None:
+    source = tmp_path / "report.txt"
+    source.write_text("public", encoding="utf-8")
+    journal = _journal_path(tmp_path)
+    backend = RecordingBackend()
+    command = PublicCommands(backend, _config(journal=journal), timeout_seconds=9)
+
+    def fail_replace(_path: Path, _content: bytes) -> None:
+        raise JournalError("simulated local record failure")
+
+    monkeypatch.setattr(journal_module, "_atomic_replace", fail_replace)
+
+    with pytest.raises(JournalError) as caught:
+        if operation == "publish":
+            command.publish(str(source), "/Hermes/public/report.txt", yes=True)
+        else:
+            command.link("/Hermes/public/report.txt")
+
+    assert caught.value.error.kind is ErrorKind.UNKNOWN_ERROR
+    assert "remote effect may have occurred" in str(caught.value)
+    assert "will not be retried" in str(caught.value)
+    assert PUBLIC_URL not in str(caught.value)
+    assert str(journal.parent) not in str(caught.value)
+    assert [call[0][0] for call in backend.calls] == (
+        ["copyto", "link"] if operation == "publish" else ["link"]
+    )
+    assert not journal.exists()
 
 
 def test_public_dry_runs_validate_without_journal_or_backend_calls(tmp_path: Path) -> None:
@@ -226,74 +273,27 @@ def test_public_dry_runs_validate_without_journal_or_backend_calls(tmp_path: Pat
     assert backend.calls == []
 
 
-_FAKE_RCLONE = """#!/usr/bin/env python3
-import json
-import sys
-from pathlib import Path
-
-command, *args = sys.argv[1:]
-with Path(__file__).with_name("rclone.jsonl").open("a", encoding="utf-8") as output:
-    output.write(json.dumps([command, *args]) + "\\n")
-if command == "copyto":
-    raise SystemExit(0)
-if command == "link":
-    url = "https://cloud.mail.ru/public/public-command-capability/path"
-    print(f"{url} {url}" if "ambiguous" in Path(__file__).name else url)
-    raise SystemExit(0)
-sys.stderr.write("unexpected fake command token=raw-backend-sentinel\\n")
-raise SystemExit(97)
-"""
-
-
-def _fake_rclone(tmp_path: Path, *, name: str = "fake-rclone") -> Path:
-    binary = tmp_path / name
-    binary.write_text(_FAKE_RCLONE, encoding="utf-8")
-    binary.chmod(binary.stat().st_mode | stat_module.S_IXUSR)
-    return binary
-
-
-def _run_cli(
-    binary: Path,
-    journal: Path,
-    *arguments: str,
-    extra_environment: dict[str, str] | None = None,
-) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        [sys.executable, "-m", "hermes_mailcloud.cli", *arguments],
-        capture_output=True,
-        text=True,
-        timeout=10,
-        env={
-            **os.environ,
-            "HMC_REMOTE": "fake:",
-            "HMC_RCLONE_PATH": str(binary),
-            "HMC_LINKS_JOURNAL": str(journal),
-            **(extra_environment or {}),
-        },
-    )
-
-
 def test_cli_public_commands_emit_only_fingerprints_and_keep_capabilities_in_journal(
     tmp_path: Path,
 ) -> None:
-    binary = _fake_rclone(tmp_path)
-    journal = tmp_path / "links.jsonl"
-    source = tmp_path / "report.txt"
+    harness = CliFakeHarness.create(tmp_path)
+    source = tmp_path / "report [1] & ü.txt"
     source.write_text("public", encoding="utf-8")
+    remote_path = "/Hermes/public/отчёт [1] & done.txt"
+    responses = {"link": {"stdout": f"{PUBLIC_URL}\n"}}
 
-    published = _run_cli(
-        binary,
-        journal,
+    published = harness.run(
         "publish",
         str(source),
-        "/Hermes/public/report.txt",
+        remote_path,
         "--yes",
         "--json",
+        responses=responses,
     )
-    linked = _run_cli(binary, journal, "link", "/Hermes/public/report.txt", "--json")
+    linked = harness.run("link", remote_path, "--json", responses=responses)
 
-    assert published.returncode == 0
-    assert linked.returncode == 0
+    assert published.returncode == 0, published.stderr
+    assert linked.returncode == 0, linked.stderr
     assert published.stderr == linked.stderr == ""
     assert PUBLIC_URL not in published.stdout + linked.stdout
     assert (
@@ -304,37 +304,45 @@ def test_cli_public_commands_emit_only_fingerprints_and_keep_capabilities_in_jou
         json.loads(linked.stdout)["result"]["public_url_fingerprint"]
         == PublicLink(PUBLIC_URL).fingerprint
     )
-    records = [json.loads(line) for line in journal.read_text(encoding="utf-8").splitlines()]
+    records = [
+        json.loads(line) for line in harness.journal.read_text(encoding="utf-8").splitlines()
+    ]
     assert [record["operation"] for record in records] == ["publish", "link"]
     assert all(record["public_url"] == PUBLIC_URL for record in records)
+    calls = harness.recorded_calls()
+    assert calls == [
+        ["copyto", str(source), f"fake:{remote_path}", "--immutable"],
+        ["link", f"fake:{remote_path}"],
+        ["link", f"fake:{remote_path}"],
+    ]
 
 
-def test_cli_public_link_parse_errors_do_not_emit_raw_provider_capabilities(tmp_path: Path) -> None:
-    binary = _fake_rclone(tmp_path, name="ambiguous-rclone")
-    journal = tmp_path / "links.jsonl"
+def test_cli_public_link_parse_errors_do_not_emit_raw_provider_capabilities(
+    tmp_path: Path,
+) -> None:
+    harness = CliFakeHarness.create(tmp_path)
+    remote_path = "/Hermes/public/report.txt"
 
-    result = _run_cli(
-        binary,
-        journal,
+    result = harness.run(
         "link",
-        "/Hermes/public/report.txt",
+        remote_path,
         "--json",
+        responses={"link": {"stdout": f"{PUBLIC_URL} {PUBLIC_URL}\n"}},
     )
 
     assert result.returncode == 13
     assert json.loads(result.stdout)["error"]["kind"] == "parse_error"
     assert PUBLIC_URL not in result.stdout + result.stderr
-    assert not journal.exists()
+    assert not harness.journal.exists()
 
 
 def test_cli_keeps_unlink_absent_until_its_live_invalidation_capability_passes(
     tmp_path: Path,
 ) -> None:
-    binary = _fake_rclone(tmp_path)
-    journal = tmp_path / "links.jsonl"
+    harness = CliFakeHarness.create(tmp_path)
 
-    result = _run_cli(binary, journal, "unlink", "/Hermes/public/report.txt", "--json")
+    result = harness.run("unlink", "/Hermes/public/report.txt", "--json")
 
     assert result.returncode == 2
     assert json.loads(result.stdout)["error"]["kind"] == "invalid_arguments"
-    assert not (tmp_path / "rclone.jsonl").exists()
+    assert harness.recorded_calls() == []

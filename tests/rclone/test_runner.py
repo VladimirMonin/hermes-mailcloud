@@ -16,6 +16,7 @@ from hermes_mailcloud.rclone.runner import (
     RcloneResult,
     RcloneRunner,
     RcloneRunnerError,
+    deterministic_environment,
     map_rclone_error,
 )
 
@@ -23,12 +24,35 @@ ROOT = Path(__file__).parent
 FAKE_RCLONE = ROOT / "fake_rclone.py"
 
 
-def _runner(*, max_capture_bytes: int = 1024) -> RcloneRunner:
+def _runner(*, max_capture_bytes: int = 64 * 1024) -> RcloneRunner:
+    environment = {"PATH": os.environ.get("PATH", "")}
+    if os.name == "nt":
+        environment["SystemRoot"] = os.environ.get("SystemRoot", "")
     return RcloneRunner(
         (sys.executable, str(FAKE_RCLONE)),
-        environment={"PATH": os.environ.get("PATH", "")},
+        environment=environment,
         max_capture_bytes=max_capture_bytes,
     )
+
+
+def _expected_environment(*, system_root: str | None) -> dict[str, str]:
+    expected = {
+        "PATH": os.environ.get("PATH", ""),
+        "LANG": "C",
+        "LC_ALL": "C",
+        "TZ": "UTC",
+        "NO_COLOR": "1",
+        "TERM": "dumb",
+    }
+    if system_root is not None:
+        expected["SystemRoot"] = system_root
+    return _normalized_environment(expected)
+
+
+def _normalized_environment(environment: dict[str, str]) -> dict[str, str]:
+    if os.name == "nt":
+        return {key.upper(): value for key, value in environment.items()}
+    return dict(environment)
 
 
 def test_runner_uses_literal_argv_and_a_deterministic_minimal_environment() -> None:
@@ -38,13 +62,45 @@ def test_runner_uses_literal_argv_and_a_deterministic_minimal_environment() -> N
     assert result.stderr == ""
     payload = json.loads(result.stdout)
     assert payload["arguments"] == ["literal;not-a-shell-command"]
-    assert payload["environment"] == {
+    assert _normalized_environment(payload["environment"]) == _expected_environment(
+        system_root=os.environ.get("SystemRoot") if os.name == "nt" else None
+    )
+
+
+def test_deterministic_environment_keeps_only_allowlisted_keys_case_insensitively() -> None:
+    source = {
+        "path": "synthetic-path-value",
+        "HOME": "synthetic-home",
+        "RCLONE_CONFIG": "synthetic-rclone-config",
+        "SystemRoot": "synthetic-system-root",
+        "WINDIR": "forbidden-windir",
+        "USERPROFILE": "forbidden-profile",
+        "APPDATA": "forbidden-appdata",
+        "LOCALAPPDATA": "forbidden-localappdata",
+        "TEMP": "forbidden-temp",
+        "TMP": "forbidden-tmp",
+        "HMC_TOKEN": "forbidden-hmc-token",
+        "RCLONE_PASSWORD": "forbidden-rclone-password",
+        "HTTP_PROXY": "forbidden-proxy",
+    }
+
+    environment = deterministic_environment(source)
+
+    expected = {
+        "PATH": "synthetic-path-value" if os.name == "nt" else os.defpath,
         "LANG": "C",
         "LC_ALL": "C",
         "TZ": "UTC",
         "NO_COLOR": "1",
         "TERM": "dumb",
+        "HOME": "synthetic-home",
+        "RCLONE_CONFIG": "synthetic-rclone-config",
     }
+    if os.name == "nt":
+        expected["SystemRoot"] = "synthetic-system-root"
+    assert environment == expected
+    rendered = json.dumps(environment)
+    assert "forbidden" not in rendered
 
 
 def test_runner_maps_nonzero_fake_output_without_serializing_raw_diagnostics() -> None:

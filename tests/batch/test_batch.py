@@ -3,9 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
-import stat as stat_module
-import subprocess
 import sys
 from collections.abc import Sequence
 from dataclasses import dataclass, field
@@ -14,13 +11,23 @@ from pathlib import Path
 import pytest
 
 import hermes_mailcloud.journal as journal_module
+from hermes_mailcloud._platform import PrivateStorageError
 from hermes_mailcloud.batch import BatchCommands, BatchPlan, parse_batch_document, parse_batch_file
 from hermes_mailcloud.config import ResolvedConfig
 from hermes_mailcloud.core.errors import ErrorKind, ErrorPayload, MailCloudError
-from hermes_mailcloud.journal import MAX_JOURNAL_BYTES, JournalError
+from hermes_mailcloud.journal import MAX_JOURNAL_BYTES, JournalError, LinkJournal
+from hermes_mailcloud.rclone.parser import PublicLink
 from hermes_mailcloud.rclone.runner import RcloneResult, RcloneRunnerError
 
+_TESTS_ROOT = next(parent for parent in Path(__file__).resolve().parents if parent.name == "tests")
+if str(_TESTS_ROOT) not in sys.path:
+    sys.path.insert(0, str(_TESTS_ROOT))
+
+from helpers.cli_fake import CliFakeHarness  # noqa: E402
+from helpers.journal_worker import broaden_capability, make_reparse_link  # noqa: E402
+
 FIXTURES = Path(__file__).with_name("fixtures")
+PUBLIC_URL = "https://cloud.mail.ru/public/batch-capability/path"
 
 
 @dataclass
@@ -69,6 +76,18 @@ def _plan(*operations: dict[str, object], continue_on_error: bool = False) -> Ba
             "operations": list(operations),
         }
     )
+
+
+def _journal_path(root: Path) -> Path:
+    return root / "private-state" / "links.jsonl"
+
+
+def _lock_path(journal: Path) -> Path:
+    return journal.with_name(f".{journal.name}.lock")
+
+
+def _prepare_private_journal(journal: Path) -> None:
+    LinkJournal(journal).record("publish", "/Hermes/public/seed.txt", PublicLink(PUBLIC_URL))
 
 
 def test_dry_run_matches_the_golden_plan_and_never_calls_the_backend() -> None:
@@ -193,39 +212,35 @@ def test_real_public_batch_requires_journal_before_any_preflight_or_backend_use(
 def _make_journal_preflight_fail(
     journal: Path, failure: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    if failure == "unreadable_journal":
+        _prepare_private_journal(journal)
+
+        def deny_read(*_args: object, **_kwargs: object) -> bytes:
+            raise PrivateStorageError("local link journal could not be read safely")
+
+        monkeypatch.setattr(journal_module, "_read_private_journal", deny_read)
+        return
+
+    _prepare_private_journal(journal)
+
     if failure == "insecure_lock":
-        lock_path = journal.with_name(f".{journal.name}.lock")
-        lock_path.write_bytes(b"")
-        lock_path.chmod(0o644)
+        broaden_capability(_lock_path(journal))
         return
     if failure == "symlink_lock":
-        journal.with_name(f".{journal.name}.lock").symlink_to("untrusted-lock-target")
+        lock = _lock_path(journal)
+        lock.unlink()
+        target = journal.parent / "link-target"
+        target.mkdir()
+        try:
+            make_reparse_link(lock, target)
+        except OSError:
+            pytest.skip("creating a test reparse link is unavailable in this environment")
         return
     if failure == "invalid_permission_journal":
-        journal.write_bytes(b'{"version":1}\n')
-        journal.chmod(0o644)
+        broaden_capability(journal)
         return
     if failure == "oversized_journal":
         journal.write_bytes(b"x" * (MAX_JOURNAL_BYTES + 1))
-        journal.chmod(0o600)
-        return
-    if failure == "unreadable_journal":
-        journal.write_bytes(b'{"version":1}\n')
-        journal.chmod(0o600)
-        original_open = journal_module.os.open
-
-        def deny_journal_open(
-            candidate: str | Path,
-            flags: int,
-            mode: int = 0o777,
-            *,
-            dir_fd: int | None = None,
-        ) -> int:
-            if Path(candidate) == journal:
-                raise PermissionError("journal read denied")
-            return original_open(candidate, flags, mode, dir_fd=dir_fd)
-
-        monkeypatch.setattr(journal_module.os, "open", deny_journal_open)
         return
     raise AssertionError(f"unknown journal preflight failure: {failure}")
 
@@ -246,7 +261,7 @@ def test_batch_public_journal_preflight_fails_before_any_backend_operation(
 ) -> None:
     source = tmp_path / "report.txt"
     source.write_text("public", encoding="utf-8")
-    journal = tmp_path / "links.jsonl"
+    journal = _journal_path(tmp_path)
     _make_journal_preflight_fail(journal, failure, monkeypatch)
     backend = RecordingBackend()
     public_fields: dict[str, object] = {
@@ -267,6 +282,53 @@ def test_batch_public_journal_preflight_fails_before_any_backend_operation(
         )
 
     assert backend.calls == []
+
+
+@pytest.mark.parametrize("continue_on_error", [False, True])
+def test_public_batch_backend_success_then_journal_failure_keeps_partial_contract(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, continue_on_error: bool
+) -> None:
+    source = tmp_path / "report.txt"
+    source.write_text("public", encoding="utf-8")
+    journal = _journal_path(tmp_path)
+    outcomes = [
+        RcloneResult(0, "", "", 1),
+        RcloneResult(0, f"{PUBLIC_URL}\n", "", 1),
+    ]
+    if continue_on_error:
+        outcomes.append(RcloneResult(0, "", "", 1))
+    backend = RecordingBackend(outcomes)
+    plan = _plan(
+        {
+            "op": "publish",
+            "local_path": str(source),
+            "remote_path": "/Hermes/public/report.txt",
+        },
+        {"op": "mkdir", "remote_path": "/Hermes/private/after-public"},
+        continue_on_error=continue_on_error,
+    )
+
+    def fail_replace(_path: Path, _content: bytes) -> None:
+        raise JournalError("simulated local record failure")
+
+    monkeypatch.setattr(journal_module, "_atomic_replace", fail_replace)
+
+    execution = _commands(backend, journal=journal).run(plan, dry_run=False, yes=True)
+
+    assert execution.result["status"] == "partial_failure"
+    assert execution.result["exit_code"] == 11
+    assert execution.result["total"] == (2 if continue_on_error else 1)
+    assert execution.result["failed"] == 1
+    first = execution.result["items"][0]
+    assert first["ok"] is False
+    assert first["error"]["kind"] == "unknown_error"
+    assert "remote effect may have occurred" in first["error"]["message"]
+    assert "will not be retried" in first["error"]["message"]
+    assert PUBLIC_URL not in json.dumps(execution.result)
+    assert str(journal.parent) not in json.dumps(execution.result)
+    assert [call[0][0] for call in backend.calls] == (
+        ["copyto", "link", "mkdir"] if continue_on_error else ["copyto", "link"]
+    )
 
 
 def test_continue_on_error_returns_ordered_partial_failure_items() -> None:
@@ -343,47 +405,10 @@ def test_default_stop_after_error_preserves_attempt_order_without_running_later_
     assert [call[0] for call in backend.calls] == [("mkdir", "mailru:/Hermes/private/failed")]
 
 
-_FAKE_RCLONE = """#!/usr/bin/env python3
-import json
-import sys
-from pathlib import Path
-
-command, *args = sys.argv[1:]
-with Path(__file__).with_name("rclone.jsonl").open("a", encoding="utf-8") as output:
-    output.write(json.dumps([command, *args]) + "\\n")
-if command == "mkdir" and args == ["fake:/Hermes/private/reports"]:
-    raise SystemExit(0)
-if command == "mkdir" and args == ["fake:/Hermes/private/failed"]:
-    sys.stderr.write("network is unreachable batch-backend-sentinel")
-    raise SystemExit(1)
-if command == "mkdir" and args == ["fake:/Hermes/private/succeeded"]:
-    raise SystemExit(0)
-sys.stderr.write("unexpected fake rclone command secret=batch-rclone-sentinel")
-raise SystemExit(97)
-"""
-
-
-def _fake_rclone(tmp_path: Path) -> Path:
-    binary = tmp_path / "fake-rclone"
-    binary.write_text(_FAKE_RCLONE, encoding="utf-8")
-    binary.chmod(binary.stat().st_mode | stat_module.S_IXUSR)
-    return binary
-
-
-def _run_cli(binary: Path, *arguments: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        [sys.executable, "-m", "hermes_mailcloud.cli", *arguments],
-        capture_output=True,
-        text=True,
-        timeout=10,
-        env={**os.environ, "HMC_REMOTE": "fake:", "HMC_RCLONE_PATH": str(binary)},
-    )
-
-
 def test_cli_executes_the_validated_plan_and_emits_a_golden_completed_envelope(
     tmp_path: Path,
 ) -> None:
-    binary = _fake_rclone(tmp_path)
+    harness = CliFakeHarness.create(tmp_path)
     plan_path = tmp_path / "plan.json"
     plan_path.write_text(
         json.dumps(
@@ -395,9 +420,9 @@ def test_cli_executes_the_validated_plan_and_emits_a_golden_completed_envelope(
         encoding="utf-8",
     )
 
-    result = _run_cli(binary, "batch", str(plan_path), "--json", "--yes")
+    result = harness.run("batch", str(plan_path), "--json", "--yes")
 
-    assert result.returncode == 0
+    assert result.returncode == 0, result.stderr
     assert result.stderr == ""
     assert json.loads(result.stdout) == {
         "ok": True,
@@ -419,15 +444,13 @@ def test_cli_executes_the_validated_plan_and_emits_a_golden_completed_envelope(
             ],
         },
     }
-    assert [json.loads(line) for line in (tmp_path / "rclone.jsonl").read_text().splitlines()] == [
-        ["mkdir", "fake:/Hermes/private/reports"]
-    ]
+    assert harness.recorded_calls() == [["mkdir", "fake:/Hermes/private/reports"]]
 
 
 def test_cli_partial_failure_exits_11_and_never_leaks_fake_backend_diagnostics(
     tmp_path: Path,
 ) -> None:
-    binary = _fake_rclone(tmp_path)
+    harness = CliFakeHarness.create(tmp_path)
     plan_path = tmp_path / "partial.json"
     plan_path.write_text(
         json.dumps(
@@ -442,8 +465,14 @@ def test_cli_partial_failure_exits_11_and_never_leaks_fake_backend_diagnostics(
         ),
         encoding="utf-8",
     )
+    responses = {
+        json.dumps(["mkdir", "fake:/Hermes/private/failed"]): {
+            "stderr": "network is unreachable batch-backend-sentinel\n",
+            "returncode": 1,
+        }
+    }
 
-    result = _run_cli(binary, "batch", str(plan_path), "--json", "--yes")
+    result = harness.run("batch", str(plan_path), "--json", "--yes", responses=responses)
 
     assert result.returncode == 11
     assert result.stderr == ""
@@ -476,7 +505,7 @@ def test_cli_partial_failure_exits_11_and_never_leaks_fake_backend_diagnostics(
 
 
 def test_cli_batch_dry_run_validates_without_launching_the_fake_backend(tmp_path: Path) -> None:
-    binary = _fake_rclone(tmp_path)
+    harness = CliFakeHarness.create(tmp_path)
     plan_path = tmp_path / "dry-run.json"
     plan_path.write_text(
         json.dumps(
@@ -488,9 +517,9 @@ def test_cli_batch_dry_run_validates_without_launching_the_fake_backend(tmp_path
         encoding="utf-8",
     )
 
-    result = _run_cli(binary, "batch", str(plan_path), "--json", "--dry-run")
+    result = harness.run("batch", str(plan_path), "--json", "--dry-run")
 
-    assert result.returncode == 0
+    assert result.returncode == 0, result.stderr
     assert result.stderr == ""
     assert json.loads(result.stdout)["result"]["items"][0]["result"]["dry_run"] is True
-    assert not (tmp_path / "rclone.jsonl").exists()
+    assert harness.recorded_calls() == []

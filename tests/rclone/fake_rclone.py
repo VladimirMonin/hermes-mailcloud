@@ -17,10 +17,7 @@ def main() -> int:
             json.dumps(
                 {
                     "arguments": arguments,
-                    "environment": {
-                        key: os.environ.get(key)
-                        for key in ("LANG", "LC_ALL", "TZ", "NO_COLOR", "TERM")
-                    },
+                    "environment": dict(os.environ),
                 },
                 sort_keys=True,
             )

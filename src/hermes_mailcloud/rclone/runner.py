@@ -136,7 +136,7 @@ def deterministic_environment(source: Mapping[str, str] | None = None) -> dict[s
     """Return the narrow environment rclone needs without inheriting unrelated secrets."""
     inherited = os.environ if source is None else source
     environment = {
-        "PATH": inherited.get("PATH") or os.defpath,
+        "PATH": _environment_value(inherited, "PATH") or os.defpath,
         "LANG": "C",
         "LC_ALL": "C",
         "TZ": "UTC",
@@ -144,10 +144,27 @@ def deterministic_environment(source: Mapping[str, str] | None = None) -> dict[s
         "TERM": "dumb",
     }
     for key in ("HOME", "XDG_CONFIG_HOME", "RCLONE_CONFIG"):
-        value = inherited.get(key)
+        value = _environment_value(inherited, key)
         if value:
             environment[key] = value
+    if os.name == "nt":
+        system_root = _environment_value(inherited, "SystemRoot")
+        if system_root:
+            environment["SystemRoot"] = system_root
     return environment
+
+
+def _environment_value(source: Mapping[str, str], key: str) -> str | None:
+    """Read one allowlisted key, matching Windows key case-insensitivity explicitly."""
+    value = source.get(key)
+    if value:
+        return value
+    if os.name == "nt":
+        folded = key.casefold()
+        for candidate, candidate_value in source.items():
+            if candidate.casefold() == folded and candidate_value:
+                return candidate_value
+    return None
 
 
 def map_rclone_error(result: RcloneResult) -> ErrorPayload:

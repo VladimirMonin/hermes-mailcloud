@@ -8,10 +8,15 @@ from pathlib import Path
 from ..config import ConfigError, ResolvedConfig
 from ..core.errors import ErrorKind, ErrorPayload, MailCloudError
 from ..core.policy import OperationRequest, validate_operation
-from ..journal import LinkJournal
-from ..rclone.parser import parse_public_link
+from ..journal import JournalError, LinkJournal
+from ..rclone.parser import PublicLink, parse_public_link
 from .backend import RcloneBackend, configured_target
 from .transfer import overwrite_args, resolve_overwrite
+
+_POST_BACKEND_RECORD_FAILURE = (
+    "the public link was created but could not be recorded locally; "
+    "the remote effect may have occurred and this operation will not be retried"
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,7 +76,7 @@ class PublicCommands:
             ["link", target], timeout_seconds=self.timeout_seconds
         )
         public_link = parse_public_link(linked.stdout)
-        journal.record("publish", decision.remote_path, public_link)
+        _record_after_backend(journal, "publish", decision.remote_path, public_link)
         return {
             **result,
             "published": True,
@@ -102,7 +107,7 @@ class PublicCommands:
             ["link", target], timeout_seconds=self.timeout_seconds
         )
         public_link = parse_public_link(linked.stdout)
-        journal.record("link", decision.remote_path, public_link)
+        _record_after_backend(journal, "link", decision.remote_path, public_link)
         return {
             **result,
             "public_url_fingerprint": public_link.fingerprint,
@@ -115,6 +120,16 @@ class PublicCommands:
                 "links_journal must be configured for public link operations", field="links_journal"
             )
         return LinkJournal(self.config.links_journal)
+
+
+def _record_after_backend(
+    journal: LinkJournal, operation: str, remote_path: str, public_link: PublicLink
+) -> None:
+    """Refuse false success or an automatic retry when the remote effect already happened."""
+    try:
+        journal.record(operation, remote_path, public_link)
+    except JournalError as exc:
+        raise JournalError(_POST_BACKEND_RECORD_FAILURE) from exc
 
 
 def _require_local_source(local_path: str, *, role: str) -> tuple[Path, int]:
