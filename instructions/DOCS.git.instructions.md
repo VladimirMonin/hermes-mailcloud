@@ -21,8 +21,10 @@ description: "Git staging, conventional commit message, secret/artifact, commit,
 
 ## Authorization boundary
 
-- Commit only after an explicit user request to commit.
+- Commit only with explicit user authorization, including a program-level grant to the designated reviewer for accepted local scoped commits. That grant need not be requested again for each accepted slice.
 - Push only after an explicit user request to push; permission to commit does not imply permission to push.
 - Never rewrite history, force-push, discard user changes, or amend an existing commit without explicit direction.
-- For an owner-approved staged program, Terra writes the bounded stage, Sol/default independently reviews it, and Sol/default creates the scoped commit only after an exact PASS. Implementation and review workers do not commit.
-- Tiny accepted documentation/instruction corrections do not require a separate Kanban card or worker session; Sol/default may apply them directly before the scoped commit and rerun only the affected deterministic checks.
+- For owner-approved direct Pi development, one coder writes coherent code/test slices and freezes each candidate. One independent designated reviewer owns acceptance, the index, and the scoped local commit after PASS. The coder does not stage or commit; Hermes only coordinates. Keep the candidate frozen until the reviewer requests bounded corrections or commits it.
+- Before committing, verify that the effective author and committer use the configured public GitHub noreply identity without printing private email values. Do not change global Git configuration or recover old personal identity data.
+- Tiny documentation/instruction corrections need no separate Kanban card or worker session. The designated reviewer may apply them directly and rerun only affected deterministic checks; a docs-only bootstrap does not require the full Python suite.
+- After an accepted code commit, the coder may start the next authorized slice while the reviewer updates documentation/instructions on explicitly disjoint paths. Keep a single index owner, stage exact paths, and never include the coder's in-flight changes in a documentation commit.

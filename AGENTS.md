@@ -4,7 +4,7 @@ Read this file first, then every matching file in `instructions/` before editing
 
 ## Project identity
 
-`hermes-mailcloud` is a Python 3.12+ agent CLI for Mail.ru Cloud. The current implementation is a Wave 0 Typer skeleton; the documented target architecture is JSON-first and delegates cloud operations to an external `rclone` subprocess.
+`hermes-mailcloud` is a Python 3.12+ agent CLI for Mail.ru Cloud. Current source implements JSON-first commands backed by an external `rclone` subprocess; broader documented plans are not automatically implemented capabilities.
 
 Confirmed project facts:
 
@@ -35,9 +35,9 @@ Run the smallest relevant offline test first. Do not run live tests or probes by
 4. Never expose or commit credentials, `.env`, rclone configuration, cloud data, public-link journals, databases, logs, caches, or generated probe artifacts.
 5. Cloud-mutating operations, live tests, and probes require explicit user intent and isolated test paths.
 6. Do not create status, history, session-report, or progress-report documents.
-7. Commit and push only on explicit user request.
-8. Terra implements bounded stage slices; Sol/default independently reviews each stage and owns accepted scoped commits. Implementation and review workers do not commit.
-9. Do not create Kanban cards for one-to-three-line documentation, instruction, wording, routing, formatting, or control-plane fixes that do not change product semantics, security, schemas, privacy, integrity, or dependencies. Sol/default fixes those directly and reruns only affected checks.
+7. Commit and push require separate explicit user authorization. An approved implementation program may authorize the designated reviewer to make local scoped commits after PASS; it does not authorize push.
+8. For direct Pi development, one coder implements broad, coherent slices of code and tests; one independent designated reviewer accepts each frozen candidate, owns Git staging/local commits, and maintains documentation/instructions. The coder does not commit; Hermes coordinates rather than implements or supplies a second review. See `docs/agent-workflow.md`.
+9. Direct Pi development does not require new Kanban cards or changes to existing assignments. Tiny documentation/instruction corrections may be made directly by the designated reviewer with only affected checks; existing Kanban work retains its own routing.
 10. A blocker is a demonstrated condition that cannot be resolved safely inside the approved scope: unavailable credentials after the real bootstrap, risk to existing user data, an ambiguous external side effect, a frozen-contract conflict, or exhausted safe repair strategies. Routine review, tests, documentation sync, and already-approved Mail.ru access are not blockers.
 11. All project-owned Mail.ru test mutations are confined to `/TEST/<unique-run-id>/`. Existing objects outside `/TEST` are read-only and must never be overwritten, moved, published, or deleted.
 
