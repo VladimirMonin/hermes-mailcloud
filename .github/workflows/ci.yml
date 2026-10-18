@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   quality:
-    name: Offline quality and wheel smoke
+    name: Lock and source quality
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -19,35 +19,106 @@ jobs:
           python-version: "3.12"
       - uses: astral-sh/setup-uv@v6
       - name: Synchronize locked development environment
+        timeout-minutes: 2
         run: uv sync --locked --all-groups --all-extras
       - name: Validate lockfile
+        timeout-minutes: 2
         run: uv lock --check
       - name: Lint
-        run: uv run ruff check .
+        timeout-minutes: 2
+        run: uv run --no-sync --offline ruff check .
       - name: Check formatting
-        run: uv run ruff format --check .
-      - name: Run offline tests
-        run: uv run pytest -q -m "not live"
-      - name: Build distributions
-        run: uv build
-      - name: Smoke-test the installed wheel in a clean environment
-        shell: bash
-        run: |
-          set -euo pipefail
-          smoke_dir="$(mktemp -d)"
-          trap 'rm -rf "$smoke_dir"' EXIT
-          uv venv "$smoke_dir/venv" --python 3.12
-          uv pip install --python "$smoke_dir/venv/bin/python" dist/*.whl
-          smoke_env=(env -i PATH="$PATH" HOME="$smoke_dir/home" XDG_CONFIG_HOME="$smoke_dir/config")
-          "${smoke_env[@]}" "$smoke_dir/venv/bin/hermes-mailcloud" --help
-          "${smoke_env[@]}" "$smoke_dir/venv/bin/hermes-mailcloud" version
-          "${smoke_env[@]}" "$smoke_dir/venv/bin/hermes-mailcloud" --json doctor > "$smoke_dir/doctor.json"
-          "$smoke_dir/venv/bin/python" - "$smoke_dir/doctor.json" <<'PY'
-          import json
-          import sys
+        timeout-minutes: 2
+        run: uv run --no-sync --offline ruff format --check .
 
-          payload = json.load(open(sys.argv[1], encoding="utf-8"))
-          assert payload["ok"] is True
-          assert payload["operation"] == "doctor"
-          assert payload["result"]["mode"] == "read_only"
-          PY
+  runtime:
+    name: ${{ matrix.os }} / Python ${{ matrix.python }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ["3.12", "3.13"]
+    env:
+      UV_PYTHON: ${{ matrix.python }}
+      UV_CACHE_DIR: ${{ runner.temp }}/mailcloud-uv-cache
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONUTF8: "1"
+      PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: astral-sh/setup-uv@v6
+      - name: Synchronize locked development environment
+        timeout-minutes: 2
+        run: uv sync --locked --all-groups --all-extras
+      - name: Prepare an empty synthetic test environment
+        shell: python
+        timeout-minutes: 2
+        run: |
+          import os
+          from pathlib import Path
+          root = Path(os.environ["RUNNER_TEMP"]) / "mailcloud-offline"
+          values = {}
+          for key, name in (("HOME", "home"), ("USERPROFILE", "home"),
+                            ("XDG_CONFIG_HOME", "config"), ("APPDATA", "appdata"),
+                            ("LOCALAPPDATA", "localappdata"), ("TEMP", "temp"),
+                            ("TMP", "temp"), ("TMPDIR", "temp")):
+              path = root / name
+              path.mkdir(parents=True, exist_ok=True)
+              values[key] = str(path)
+          (root / "config.toml").write_text("[profiles.default]\n", encoding="utf-8")
+          (root / "empty-rclone.conf").write_text("", encoding="utf-8")
+          values.update(HMC_CONFIG=str(root / "config.toml"),
+                        RCLONE_CONFIG=str(root / "empty-rclone.conf"),
+                        HMC_RCLONE_PATH=str(root / "no-real-rclone.exe"),
+                        HMC_LINKS_JOURNAL=str(root / "synthetic-links.jsonl"))
+          with Path(os.environ["GITHUB_ENV"]).open("a", encoding="utf-8") as output:
+              for key, value in values.items():
+                  output.write(f"{key}={value}\n")
+      # These four packs are disjoint and cover every test module. A packaging
+      # control rejects omissions/overlaps; all live-marked items stay deselected.
+      - name: Offline core, CLI and packaging controls
+        timeout-minutes: 2
+        run: >-
+          uv run --no-sync --offline python -m pytest -q -ra
+          tests/core tests/doctor tests/probes tests/live tests/packaging
+          tests/test_cli_smoke.py tests/test_cli_json.py tests/test_schemas.py tests/test_version.py
+          -m "not live" -p no:cacheprovider --basetemp "${{ runner.temp }}/hmc-pytest-core"
+      - name: Offline file, public and batch composed pack
+        timeout-minutes: 2
+        run: >-
+          uv run --no-sync --offline python -m pytest -q -ra
+          tests/commands tests/batch tests/test_cli_fake_harness.py
+          -m "not live" -p no:cacheprovider --basetemp "${{ runner.temp }}/hmc-pytest-commands"
+      - name: Offline private journal pack
+        timeout-minutes: 2
+        run: >-
+          uv run --no-sync --offline python -m pytest -q -ra
+          tests/test_journal.py tests/test_journal_alias_windows.py tests/test_journal_concurrency.py
+          tests/test_journal_posix.py tests/test_journal_posix_read.py
+          tests/test_journal_windows.py tests/test_journal_windows_ace.py
+          -m "not live" -p no:cacheprovider --basetemp "${{ runner.temp }}/hmc-pytest-journal"
+      - name: Offline parser and native process pack
+        timeout-minutes: 2
+        run: >-
+          uv run --no-sync --offline python -m pytest -q -ra tests/rclone
+          -m "not live" -p no:cacheprovider --basetemp "${{ runner.temp }}/hmc-pytest-process"
+      - name: Build wheel and sdist
+        timeout-minutes: 2
+        run: uv build --out-dir "${{ runner.temp }}/mailcloud-dist"
+      - name: Export locked runtime-only constraints
+        timeout-minutes: 2
+        run: >-
+          uv export --locked --no-dev --no-emit-project --no-hashes --no-header --no-annotate
+          --output-file "${{ runner.temp }}/mailcloud-runtime.txt"
+      - name: Clean installed wheel, real launcher and composed offline smoke
+        timeout-minutes: 2
+        run: >-
+          uv run --no-sync --offline python scripts/smoke_installed.py
+          --dist-dir "${{ runner.temp }}/mailcloud-dist"
+          --constraints "${{ runner.temp }}/mailcloud-runtime.txt"
+          --cache-dir "${{ runner.temp }}/mailcloud-uv-cache"
+          --receipt "${{ runner.temp }}/mailcloud-installed-result.json"
