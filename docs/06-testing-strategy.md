@@ -125,6 +125,31 @@ class FakeRcloneRunner:
 что секреты не попадают в вывод
 ```
 
+### Native subprocess boundary and test-only argv drivers
+
+Переносимые subprocess integration tests используют `tests/helpers/cli_fake.py`:
+дочерний Python запускает настоящие CLI/adapters/runner с fake script через
+существующий Python argv prefix, без shebang/chmod и shell wrappers. Это test-only
+подстановка executable argv, не новый формат `HMC_RCLONE_PATH`, не доказательство
+реального rclone/Mail.ru и не проверка установленного console launcher. Последний
+нужно проверять отдельно вне checkout, из clean wheel, без такой подстановки.
+Полная target matrix и installed-runtime qualification ещё не завершены.
+
+Native Windows process tests проверяют suspended launch → Job assignment →
+resume, реальные self-ready parent/descendant identities, parent exit с открытыми
+pipes, timeout и startup/cleanup/pipe failures. Readiness payload должен быть
+прочитан и проверен в одном конечном budget; постоянный отказ, неверная identity
+или посторонняя ошибка не превращаются в readiness. Проверяются empty Job,
+завершение точных child handles, EOF и освобождение ресурсов; неопределённый
+cleanup не должен давать success или clean timeout. POSIX process-group проверки
+сохраняются отдельно, а их platform skip не является Windows proof. Подробный
+пользовательский contract — [Windows subprocess boundary](11-local-installation.md#windows-subprocess-boundary).
+
+File-command controls сохраняют реального конкурентного победителя download
+`never` (no-clobber) и проверяют `if-newer` по фактически различимым timestamps,
+а не по предположению о точности часов/файловой системы. Dry-run без backend,
+write-once retry policy и public/batch safety остаются обязательными.
+
 ## 6. Golden JSON tests 📦
 
 Golden-тесты фиксируют контракт ответа. Они особенно важны для агентов.

@@ -17,9 +17,12 @@ Agent CLI for Mail.ru Cloud — rclone-backed, JSON-first, safety-aware.
 
 The `v0.1.0a0` tag identifies the `0.1.0a0` alpha source snapshot. A source
 tag is not a GitHub Release, a PyPI upload, or a claim of production readiness.
-The current implementation targets Linux. Native Windows execution is not yet
-supported because the link journal uses POSIX-only file locking and filesystem
-operations; creating this tag does not resolve that limitation.
+The tag is a historical snapshot; current sources include POSIX and native
+Windows journal and subprocess backends. This is not complete Windows
+qualification: ordinary non-admin execution, the target Python/OS matrix and
+clean installed-wheel/console-launcher checks remain incomplete. Fake-backed
+checks do not prove real rclone or Mail.ru operation. See the
+[Windows boundaries and limits](docs/11-local-installation.md#windows-configuration).
 
 ## Quick start (development)
 
@@ -47,9 +50,10 @@ are in [`docs/11-local-installation.md`](docs/11-local-installation.md).
 
 ## Package smoke test
 
-Build and install the wheel into a fresh virtual environment. This smoke test
-does not use a Mail.ru credential or run a live probe; `doctor --json` remains
-read-only.
+Build and install the wheel into a fresh virtual environment. The Bash example
+below is POSIX-only, not a Windows installed-wheel qualification. This smoke
+test does not use a Mail.ru credential or run a live probe; `doctor --json`
+remains read-only.
 
 ```bash
 uv build

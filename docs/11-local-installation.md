@@ -58,10 +58,10 @@ selects `312`. Do not copy bindings manually or use MSYS/WSL permission emulatio
 as a replacement for native Windows ACLs. Linux does not require pywin32.
 See [third-party notices](../THIRD_PARTY_NOTICES.md#pywin32-notices).
 
-Native journal and fake-backed command checks do not establish complete Windows
-qualification. Ordinary non-admin Windows execution, the full target Python/OS
-matrix, remaining subprocess-tree/file-command work and clean installed-wheel/
-console-launcher qualification still need validation. The install command above
+Native journal, subprocess-tree and fake-backed file/public/batch checks do not
+establish complete Windows qualification. Ordinary non-admin Windows execution,
+the full target Python/OS matrix and clean installed-wheel/console-launcher
+qualification still need validation. The install command above
 is an installation procedure, not evidence that those gates passed or that a
 real rclone/Mail.ru account was exercised.
 
@@ -100,8 +100,25 @@ local path if the profile is redirected. Do not weaken ACLs or treat elevation
 as a portability fix. The full supported form and threat model are in
 [Windows journal boundary](08-configuration-and-secrets.md#windows-journal-boundary).
 
-Use a native `rclone.exe`, optionally an explicit executable path via
-`HMC_RCLONE_PATH`; that value is one executable, not a shell command with arguments.
+### Windows subprocess boundary
+
+Use a native `rclone.exe`. Profile `rclone_path` and `HMC_RCLONE_PATH` each name
+one executable, not a shell command or an argv list. Use an absolute path, or a
+bare name such as `rclone`/`rclone.exe` resolved only through absolute entries in
+the runner's supplied `PATH`. The runner adds `.exe` when absent; it does not
+implicitly search the working directory or use `PATHEXT`. Relative executable
+paths and `.bat`/`.cmd`/script wrappers are not supported. Arguments remain
+separate literal values; do not add shell quoting inside the configured path.
+
+The native runner creates the process suspended, assigns it to a non-breakaway
+Job Object with kill-on-close, then resumes it. Parent exit alone is not
+completion: the Job must be empty and both output pipes drained to EOF, with
+bounded capture. On timeout or supervision failure it attempts bounded tree
+termination and cleanup. If cleanup cannot be confirmed, it returns a safe typed
+`unknown_error`, not success or a claim of clean timeout; raw OS/backend diagnostics
+are not exposed. A timeout or cleanup error does not prove that a remote effect
+did not occur and does not roll it back. Writes are not automatically retried.
+POSIX execution retains its separate process-group cleanup.
 
 ### Windows storage limits
 
