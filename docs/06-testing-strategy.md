@@ -133,7 +133,9 @@ class FakeRcloneRunner:
 подстановка executable argv, не новый формат `HMC_RCLONE_PATH`, не доказательство
 реального rclone/Mail.ru и не проверка установленного console launcher. Последний
 нужно проверять отдельно вне checkout, из clean wheel, без такой подстановки.
-Полная target matrix и installed-runtime qualification ещё не завершены.
+Локальные clean-wheel/launcher и fake-backed runtime checks выполнены на
+Windows/Linux × Python 3.12/3.13. Windows evidence получено с elevation: оно не
+заменяет ordinary-user qualification, реальный rclone или remote Actions GREEN.
 
 Native Windows process tests проверяют suspended launch → Job assignment →
 resume, реальные self-ready parent/descendant identities, parent exit с открытыми
@@ -282,7 +284,12 @@ Probe можно запускать до написания основного C
 
 ## 11. CI strategy 🤖
 
-В обычном CI:
+[`.github/workflows/ci.yml`](../.github/workflows/ci.yml) задаёт Ubuntu/Windows ×
+Python 3.12/3.13. Lock/Ruff выполняются отдельно; каждая runtime cell делает locked
+dev sync, offline pytest четырьмя непересекающимися packs (core/CLI/packaging,
+commands/batch, journal, parser/process), build wheel и sdist, runtime-only locked
+export и clean installed smoke. Packaging control проверяет полноту module cover.
+Эквивалентные основные gates (pytest в CI разделён на packs):
 
 ```bash
 uv lock --check
@@ -292,10 +299,23 @@ uv run pytest -q -m "not live"
 uv build
 ```
 
-`.github/workflows/ci.yml` additionally installs the produced wheel into a
-fresh virtual environment and exercises installed `--help`, `version`, and
-read-only `doctor --json`. The workflow receives no Mail.ru credentials and
-does not run a probe script or a `live`-marked test.
+`scripts/smoke_installed.py` устанавливает wheel в новый runtime вне checkout:
+без editable/PYTHONPATH/dev dependencies, с проверкой version, import location и
+component hashes против wheel, включая Windows dependency marker. Настоящий
+launcher выполняет `--help`, `version`, JSON version и read-only JSON doctor без
+injection. Отдельный test-only argv driver использует настоящие установленные
+file/public/batch/journal components для success, safety/preflight отказов,
+zero-backend dry-run, redaction, backend failure и partial batch stop/continue.
+Schema validation выполняет dev-контроллер; `jsonschema` и другие dev packages
+не устанавливаются в чистый runtime.
+
+Сам smoke ограничивает команды Windows Jobs либо Linux subreaper/native pidfd;
+optional Python pidfd wrappers не требуются, но нужны соответствующие native
+Linux APIs. Timeout/неподтверждённый cleanup — failure, не GREEN. Окружение
+синтетическое, без Mail.ru credentials, пользовательского config или live tests;
+загрузка нужных package dependencies не является cloud-проверкой. Команды запуска
+даны в [package smoke test](../README.md#package-smoke-test).
+Локальные runtime результаты не являются remote CI run или ordinary-Windows proof.
 
 Не запускать по умолчанию:
 

@@ -58,12 +58,14 @@ selects `312`. Do not copy bindings manually or use MSYS/WSL permission emulatio
 as a replacement for native Windows ACLs. Linux does not require pywin32.
 See [third-party notices](../THIRD_PARTY_NOTICES.md#pywin32-notices).
 
-Native journal, subprocess-tree and fake-backed file/public/batch checks do not
-establish complete Windows qualification. Ordinary non-admin Windows execution,
-the full target Python/OS matrix and clean installed-wheel/console-launcher
-qualification still need validation. The install command above
-is an installation procedure, not evidence that those gates passed or that a
-real rclone/Mail.ru account was exercised.
+Local clean-wheel, real console-launcher and fake-backed file/public/batch
+checks cover Windows/Linux with Python 3.12 and 3.13, including the native journal
+and subprocess boundary. The Windows checks used elevated processes: genuine
+ordinary-user Windows qualification, trusted real-rclone offline checks and a
+remote GitHub Actions matrix remain unqualified. See the
+[portable package smoke](../README.md#package-smoke-test) for isolated wheel
+validation; it is distinct from installing the operational command above and
+does not prove real rclone/Mail.ru access or complete release readiness.
 
 On POSIX, create a new user configuration (edit an existing file instead of
 overwriting it):

@@ -18,10 +18,12 @@ Agent CLI for Mail.ru Cloud — rclone-backed, JSON-first, safety-aware.
 The `v0.1.0a0` tag identifies the `0.1.0a0` alpha source snapshot. A source
 tag is not a GitHub Release, a PyPI upload, or a claim of production readiness.
 The tag is a historical snapshot; current sources include POSIX and native
-Windows journal and subprocess backends. This is not complete Windows
-qualification: ordinary non-admin execution, the target Python/OS matrix and
-clean installed-wheel/console-launcher checks remain incomplete. Fake-backed
-checks do not prove real rclone or Mail.ru operation. See the
+Windows journal and subprocess backends. Local clean-wheel, real-launcher and
+fake-backed runtime checks cover Windows/Linux with Python 3.12 and 3.13. The
+Windows checks used elevated processes, not ordinary-user qualification.
+Genuine non-admin Windows, trusted real-rclone offline checks and a remote
+GitHub Actions matrix remain unqualified; fake-backed checks do not prove real
+rclone or Mail.ru operation. See the
 [Windows boundaries and limits](docs/11-local-installation.md#windows-configuration).
 
 ## Quick start (development)
@@ -50,25 +52,31 @@ are in [`docs/11-local-installation.md`](docs/11-local-installation.md).
 
 ## Package smoke test
 
-Build and install the wheel into a fresh virtual environment. The Bash example
-below is POSIX-only, not a Windows installed-wheel qualification. This smoke
-test does not use a Mail.ru credential or run a live probe; `doctor --json`
-remains read-only.
+After the development sync, build wheel and sdist and run the portable harness
+with the selected development interpreter. It creates a new runtime and cwd
+outside the checkout, installs only locked runtime dependencies and the wheel,
+checks import provenance, then exercises the real launcher without injection and
+fake-backed file/public/batch scenarios with installed components. No Mail.ru
+credentials or live probe are used; `doctor --json` remains read-only. Missing
+build/runtime dependencies may be resolved through package indexes.
 
-```bash
-uv build
-smoke_dir="$(mktemp -d)"
-uv venv "$smoke_dir/venv" --python 3.12
-uv pip install --python "$smoke_dir/venv/bin/python" dist/*.whl
-smoke_env=(env -i PATH="$PATH" HOME="$smoke_dir/home" XDG_CONFIG_HOME="$smoke_dir/config")
-"${smoke_env[@]}" "$smoke_dir/venv/bin/hermes-mailcloud" --help
-"${smoke_env[@]}" "$smoke_dir/venv/bin/hermes-mailcloud" version
-"${smoke_env[@]}" "$smoke_dir/venv/bin/hermes-mailcloud" --json doctor
-rm -rf "$smoke_dir"
+```console
+uv build --out-dir dist
+uv export --locked --no-dev --no-emit-project --no-hashes --no-header --no-annotate --output-file dist/runtime-constraints.txt
+uv run --no-sync --offline python scripts/smoke_installed.py --dist-dir dist --constraints dist/runtime-constraints.txt --cache-dir dist/uv-cache --receipt dist/installed-smoke.json
 ```
 
-GitHub Actions runs the same lock, lint, format, offline-test, build, and clean
-wheel-smoke gates without Mail.ru credentials or live tests.
+Use fresh output/receipt paths for another run: the harness requires exactly one
+wheel and sdist and refuses to overwrite an existing receipt. Its temporary
+runtime must be outside the checkout; Windows journal scenarios require the
+[local NTFS/private-directory boundary](docs/08-configuration-and-secrets.md#windows-journal-boundary).
+The script's optional `--offline` flag additionally forbids dependency downloads
+and needs a prepared cache; `uv run --offline` alone does not set that flag.
+
+GitHub Actions is configured for Ubuntu/Windows × Python 3.12/3.13, with disjoint
+offline packs, build and clean installed smoke per runtime cell, and a separate
+lock/lint/format job. Local checks do not establish remote Actions GREEN or a
+release qualification.
 
 ## Live tests (require real rclone + Mail.ru remote)
 
