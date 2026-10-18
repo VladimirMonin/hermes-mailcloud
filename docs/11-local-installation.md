@@ -16,7 +16,9 @@ git clone https://github.com/VladimirMonin/hermes-mailcloud.git
 cd hermes-mailcloud
 ```
 
-The repository is private at the time of writing, so students need repository access before cloning.
+The repository is public and can be cloned without a repository invitation.
+Before contributing, configure a GitHub-provided noreply address for this
+repository and follow the [repository privacy guidance](../README.md#repository-privacy).
 
 ## 2. Configure Mail.ru in rclone
 

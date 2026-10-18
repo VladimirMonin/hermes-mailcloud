@@ -13,6 +13,14 @@ Agent CLI for Mail.ru Cloud — rclone-backed, JSON-first, safety-aware.
 > audit are not shipped in v0.1.
 > Full documentation: `docs/`
 
+## Version and platform support
+
+The `v0.1.0a0` tag identifies the `0.1.0a0` alpha source snapshot. A source
+tag is not a GitHub Release, a PyPI upload, or a claim of production readiness.
+The current implementation targets Linux. Native Windows execution is not yet
+supported because the link journal uses POSIX-only file locking and filesystem
+operations; creating this tag does not resolve that limitation.
+
 ## Quick start (development)
 
 ```bash
@@ -77,3 +85,21 @@ Hermes Agent → hermes-mailcloud CLI → policy + JSON contract → rclone subp
 ```
 
 See `docs/01-architecture.md` and `docs/03-development-plan.md` for the full plan.
+
+## Repository privacy
+
+Use the GitHub-provided noreply address from your account's email settings for
+both author and committer identities. Configure it for this repository before
+creating commits or annotated tags; changing Git's display with `.mailmap` does
+not remove an address from existing commit objects.
+
+Keep credentials, real cloud data, capability URLs, and machine-specific home
+paths out of tracked files and commit or tag messages. Review metadata as well
+as file content before publishing; a clean secret scan is not a complete
+personal-data check.
+
+After a maintainer announces a privacy-related history rewrite, use a fresh
+clone. Preserve and inspect any uncommitted work separately before moving it;
+do not merge or push old branches back into the cleaned history. Rewriting
+repository history cannot erase existing external clones or guarantee removal
+of cached commit views.
