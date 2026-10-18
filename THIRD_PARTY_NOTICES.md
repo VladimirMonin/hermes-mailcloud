@@ -17,10 +17,27 @@
 | Компонент | Роль | Лицензия | Использование в проекте |
 |---|---|---|---|
 | `rclone/rclone` | Основной backend v0.1 через subprocess | MIT | Внешний бинарник, не vendored-код |
+| [`pywin32`](https://github.com/mhammond/pywin32) | Нативные Windows ACL, файловые handles и блокировки приватного журнала | PSF по metadata дистрибутива; также см. component notices ниже | Python-зависимость только при `sys_platform == 'win32'`; версия в `uv.lock` — `312`, не vendored-код |
 
 `rclone` может быть установлен отдельно пользователем или средой, где работает агент. Проект `hermes-mailcloud` не обязан распространять бинарник `rclone` вместе с собой.
 
 Если в будущем будет принято решение поставлять `rclone` внутри дистрибутива, нужно отдельно обновить этот документ, добавить upstream license notice и проверить формат распространения.
+
+### pywin32 notices
+
+У установленного `pywin32 312` поле `METADATA: License` равно `PSF`, classifier —
+`Python Software Foundation License`. Эта метка не заменяет лицензии отдельных
+компонентов в самом дистрибутиве:
+
+- `licenses/win32/License.txt`: Copyright (c) 1994–2008, Mark Hammond.
+- `licenses/com/License.txt`: Copyright (c) 1996–2008, Greg Stein and Mark Hammond.
+
+Пути выше относительны `pywin32-312.dist-info/`. Эти файлы содержат условия
+redistribution, сохранения copyright/условий/disclaimer и запрет endorsement
+без разрешения. При перераспространении зависимости сохраняйте её полные
+upstream license files, включая notices остальных включённых компонентов;
+эта краткая атрибуция их не заменяет. MIT-лицензия Hermes MailCloud не
+перелицензирует `pywin32`. На Linux эта Windows-only зависимость не требуется.
 
 ## 3. Research references
 

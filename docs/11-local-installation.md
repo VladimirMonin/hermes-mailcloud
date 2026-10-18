@@ -47,9 +47,26 @@ From the repository root:
 uv tool install --python 3.12 .
 ```
 
-Do not use `--editable` for the operational command. A non-editable tool remains on the accepted installed revision while development branches and uncommitted files change.
+Do not use `--editable` for the operational command. Install from accepted package
+sources, not a checkout with in-flight code changes: the command snapshots the
+selected sources, it does not automatically select an accepted Git commit. That
+non-editable installation then stays unchanged while later development moves on.
 
-Create the user configuration:
+Python `>=3.12` is required. On native Windows, dependency resolution includes
+`pywin32>=312` via the `sys_platform == 'win32'` marker; the repository lockfile
+selects `312`. Do not copy bindings manually or use MSYS/WSL permission emulation
+as a replacement for native Windows ACLs. Linux does not require pywin32.
+See [third-party notices](../THIRD_PARTY_NOTICES.md#pywin32-notices).
+
+Native journal and fake-backed command checks do not establish complete Windows
+qualification. Ordinary non-admin Windows execution, the full target Python/OS
+matrix, remaining subprocess-tree/file-command work and clean installed-wheel/
+console-launcher qualification still need validation. The install command above
+is an installation procedure, not evidence that those gates passed or that a
+real rclone/Mail.ru account was exercised.
+
+On POSIX, create a new user configuration (edit an existing file instead of
+overwriting it):
 
 ```bash
 mkdir -p ~/.config/hermes-mailcloud
@@ -62,7 +79,42 @@ EOF
 chmod 600 ~/.config/hermes-mailcloud/config.toml
 ```
 
-Check the installed command and read-only cloud access:
+### Windows configuration
+
+The Bash/chmod example above is POSIX-only. On Windows, create the same
+`[profiles.default]` configuration in a text editor as UTF-8 **without BOM**,
+creating its parent directory as needed. Do not overwrite an existing profile.
+For a new configuration, `links_journal` may be omitted if the explicit environment
+override below is used. In PowerShell:
+
+```powershell
+$env:HMC_CONFIG = Join-Path $env:USERPROFILE '.config\hermes-mailcloud\config.toml'
+$env:HMC_LINKS_JOURNAL = Join-Path $env:USERPROFILE 'MailCloudData\private-state\links.jsonl'
+```
+
+These variables affect this PowerShell session; they do not create the config
+file or change the platform default. Leave the new `private-state` directory
+absent so the journal backend creates its protected DACL itself. The path must
+be on local fixed NTFS with no reparse/alias components; choose another writable
+local path if the profile is redirected. Do not weaken ACLs or treat elevation
+as a portability fix. The full supported form and threat model are in
+[Windows journal boundary](08-configuration-and-secrets.md#windows-journal-boundary).
+
+Use a native `rclone.exe`, optionally an explicit executable path via
+`HMC_RCLONE_PATH`; that value is one executable, not a shell command with arguments.
+
+### Windows storage limits
+
+The journal flushes its private temporary file and performs same-directory
+replacement. Windows flushing/replacement is not a promise of POSIX-equivalent
+directory fsync or power-loss durability. An error before replacement preserves
+the old bytes; an error after replacement may leave the new version, without a
+rollback guarantee. A journal error after `publish`/`link` may follow an already
+completed remote effect: there is no automatic write retry or cloud rollback.
+See [failure after a public operation](08-configuration-and-secrets.md#failure-after-a-public-operation).
+
+Check the installed command and read-only cloud access after configuring your
+own rclone remote:
 
 ```bash
 hermes-mailcloud version

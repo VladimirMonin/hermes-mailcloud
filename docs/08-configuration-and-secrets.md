@@ -197,8 +197,7 @@ remote = "mailru:"
 ## 8. Links journal 🧾
 
 `links_journal` has no built-in default path: `publish` and `link` require an
-explicit profile value or `HMC_LINKS_JOURNAL`. A Linux/macOS owner-private
-example is:
+explicit profile value or `HMC_LINKS_JOURNAL`. A POSIX-style path example is:
 
 ```text
 ~/.local/share/hermes-mailcloud/links.jsonl
@@ -206,6 +205,43 @@ example is:
 
 Choose an owner-private path appropriate to the host platform; do not put the
 journal in the repository, a shared artifact directory, or CI output.
+
+### Windows journal boundary
+
+The native Windows journal backend is limited to Windows 11 x64 and a local
+fixed NTFS volume. Use an explicit absolute canonical path under a writable
+local parent, with a dedicated private leaf directory. Leave a new leaf absent
+so the CLI can create it privately; do not pre-create it with inherited broad
+permissions. An existing directory is accepted only if its security descriptor
+already satisfies the supported form; the CLI does not repair someone else's ACL.
+
+The directory, journal, stable sidecar lock and temporary files use a protected
+DACL with an explicit full-access owner ACE. Only the current owner, SYSTEM and
+BUILTIN\\Administrators may be granted access. Broad/NULL/inherited or unsupported
+complex ACLs are rejected. This isolates capability data from other ordinary
+users, not from processes of the same user, administrators, SYSTEM or holders of
+backup/restore privileges. Windows `chmod` is not an ACL privacy check.
+
+FAT/network storage, reparse points (including junctions/symlinks in the path),
+8.3 aliases, trailing dots/spaces, alternate data streams and device-name/path
+forms are unsupported and fail closed. Redirected profiles may therefore need
+another suitable local path; do not bypass the refusal by weakening permissions.
+Configuration defaults remain XDG/`~/.config`, not an automatic APPDATA migration.
+
+Journal updates hold one stable sidecar lock across read–modify–replace, with
+bounded contention waiting. Do not delete the sidecar while commands may use it.
+For installation and durability limits, see
+[Windows storage limits](11-local-installation.md#windows-storage-limits).
+
+### Failure after a public operation
+
+`publish`, `link` and a batch containing them preflight journal storage before
+backend effects. This cannot guarantee that a later write will succeed: the
+backend may already have created the link when local recording fails. The CLI
+returns a safe typed error rather than success, without emitting the raw URL or
+private journal path. There is no automatic retry or cloud rollback. Do not
+blindly repeat the public operation after this error; the remote effect may
+already exist, and a post-replacement error may also leave the new local record.
 
 Формат:
 
