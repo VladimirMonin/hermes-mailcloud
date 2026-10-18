@@ -3,15 +3,12 @@
 from __future__ import annotations
 
 import json
-import os
-import stat as stat_module
-import subprocess
-import sys
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
 import pytest
+from tests.helpers.cli_fake import CliFakeHarness
 
 from hermes_mailcloud.commands.remove import RemoveCommand
 from hermes_mailcloud.config import ResolvedConfig
@@ -124,42 +121,18 @@ def test_rm_requires_a_configured_remote_even_for_a_dry_run() -> None:
     assert backend.calls == []
 
 
-_FAKE_RCLONE = """#!/usr/bin/env python3
-import sys
-
-if sys.argv[1:] == ["deletefile", "fake:/Hermes/private/old.txt"]:
-    raise SystemExit(0)
-if sys.argv[1:] == ["purge", "fake:/Hermes/private/tree"]:
-    raise SystemExit(0)
-raise SystemExit(97)
-"""
-
-
-def _fake_rclone(tmp_path: Path) -> Path:
-    binary = tmp_path / "fake-rclone"
-    binary.write_text(_FAKE_RCLONE, encoding="utf-8")
-    binary.chmod(binary.stat().st_mode | stat_module.S_IXUSR)
-    return binary
-
-
-def _run_cli(binary: Path, *arguments: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        [sys.executable, "-m", "hermes_mailcloud.cli", *arguments],
-        capture_output=True,
-        text=True,
-        timeout=10,
-        env={**os.environ, "HMC_REMOTE": "fake:", "HMC_RCLONE_PATH": str(binary)},
-    )
-
-
 def test_cli_rm_serializes_success_and_rejects_unsafe_requests_before_rclone(
     tmp_path: Path,
 ) -> None:
-    binary = _fake_rclone(tmp_path)
-    deleted_file = _run_cli(binary, "rm", "/Hermes/private/old.txt", "--json", "--yes")
-    deleted_tree = _run_cli(binary, "rm", "/Hermes/private/tree", "--recursive", "--json", "--yes")
-    missing_confirmation = _run_cli(binary, "rm", "/Hermes/private/old.txt", "--json")
-    protected_root = _run_cli(binary, "rm", "/", "--json", "--yes")
+    harness = CliFakeHarness.create(tmp_path)
+    deleted_file = harness.run("rm", "/Hermes/private/old.txt", "--json", "--yes")
+    deleted_tree = harness.run("rm", "/Hermes/private/tree", "--recursive", "--json", "--yes")
+    missing_confirmation = harness.run("rm", "/Hermes/private/old.txt", "--json")
+    protected_root = harness.run("rm", "/", "--json", "--yes")
+    assert harness.recorded_calls() == [
+        ["deletefile", "fake:/Hermes/private/old.txt"],
+        ["purge", "fake:/Hermes/private/tree"],
+    ]
 
     assert deleted_file.returncode == 0
     assert deleted_file.stderr == ""

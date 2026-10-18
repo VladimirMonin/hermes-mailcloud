@@ -49,6 +49,14 @@ if response is None and arguments:
     response = responses.get(arguments[0])
 if response is None:
     response = {}
+if "sequence" in response:
+    sequence = response["sequence"]
+    calls = log_path.read_text(encoding="utf-8").splitlines()
+    attempt = sum(json.loads(line) == arguments for line in calls) - 1
+    response = sequence[min(attempt, len(sequence) - 1)]
+if ("download_text" in response and len(arguments) > 2 and arguments[0] == "copyto"
+        and Path(arguments[2]).is_absolute()):
+    Path(arguments[2]).write_text(response["download_text"], encoding="utf-8")
 stdout = response.get("stdout")
 if stdout is None and arguments and arguments[0] == "link":
     stdout = control.get("default_link_url", "") + "\\n"

@@ -3,90 +3,55 @@
 from __future__ import annotations
 
 import json
-import os
-import stat as stat_module
 import subprocess
 import sys
 from pathlib import Path
 
-FAKE_RCLONE = """#!/usr/bin/env python3
-import json
-import sys
-from pathlib import Path
+from tests.helpers.cli_fake import CliFakeHarness, isolated_environment
 
-command, *args = sys.argv[1:]
-with Path(__file__).with_name("rclone.jsonl").open("a", encoding="utf-8") as output:
-    output.write(json.dumps([command, *args]) + "\\n")
-if command == "lsjson" and args == ["fake:/Hermes"]:
-    print(json.dumps([
-        {"Path": "private", "Name": "private", "IsDir": True},
-        {
-            "Path": "private/notes.txt", "Name": "notes.txt", "IsDir": False,
-            "Size": 17, "ModTime": "2026-07-25T01:02:03Z",
-        },
-    ]))
-    raise SystemExit(0)
-if command == "lsjson" and args == ["fake:/Hermes/read-retry"]:
-    retry_marker = Path(__file__).with_name("read-retry-attempt")
-    if not retry_marker.exists():
-        retry_marker.write_text("first", encoding="utf-8")
-        sys.stderr.write("network is unreachable")
-        raise SystemExit(1)
-    print("[]")
-    raise SystemExit(0)
-if command == "lsjson" and args == ["fake:/Hermes/private/notes.txt", "--stat", "--hash"]:
-    print(json.dumps({
-        "Path": "private/notes.txt", "Name": "notes.txt", "IsDir": False, "Size": 17,
-        "ModTime": "2026-07-25T01:02:03Z", "Hashes": {"MD5": "0123456789abcdef0123456789abcdef"},
-    }))
-    raise SystemExit(0)
-if command == "mkdir" and args == ["fake:/Hermes/private/reports"]:
-    raise SystemExit(0)
-if command == "copyto" and len(args) == 3 and args[1:] == [
-    "fake:/Hermes/private/upload.txt", "--immutable"
-]:
-    raise SystemExit(0)
-if command == "copyto" and len(args) == 2 and args[0] == "fake:/Hermes/private/notes.txt":
-    Path(args[1]).write_text("downloaded", encoding="utf-8")
-    raise SystemExit(0)
-if command == "moveto" and args == [
-    "fake:/Hermes/private/source.txt", "fake:/Hermes/private/moved.txt", "--immutable"
-]:
-    raise SystemExit(0)
-if command == "copyto" and args == [
-    "fake:/Hermes/private/source.txt", "fake:/Hermes/private/copied.txt", "--immutable"
-]:
-    raise SystemExit(0)
-if command == "deletefile" and args == ["fake:/Hermes/private/old.txt"]:
-    raise SystemExit(0)
-sys.stderr.write("unexpected fake rclone command secret=cli-rclone-sentinel\\n")
-raise SystemExit(97)
-"""
+_FILE_RESPONSES = {
+    json.dumps(["lsjson", "fake:/Hermes"]): {
+        "stdout": json.dumps(
+            [
+                {"Path": "private", "Name": "private", "IsDir": True},
+                {
+                    "Path": "private/notes.txt",
+                    "Name": "notes.txt",
+                    "IsDir": False,
+                    "Size": 17,
+                    "ModTime": "2026-07-25T01:02:03Z",
+                },
+            ]
+        )
+    },
+    json.dumps(["lsjson", "fake:/Hermes/read-retry"]): {
+        "sequence": [{"returncode": 1, "stderr": "network is unreachable"}, {"stdout": "[]"}]
+    },
+    json.dumps(["lsjson", "fake:/Hermes/private/notes.txt", "--stat", "--hash"]): {
+        "stdout": json.dumps(
+            {
+                "Path": "private/notes.txt",
+                "Name": "notes.txt",
+                "IsDir": False,
+                "Size": 17,
+                "ModTime": "2026-07-25T01:02:03Z",
+                "Hashes": {"MD5": "0123456789abcdef0123456789abcdef"},
+            }
+        )
+    },
+    "lsjson": {"returncode": 97, "stderr": "secret=cli-rclone-sentinel"},
+    "copyto": {"download_text": "downloaded"},
+}
 
 
-def _fake_rclone(tmp_path: Path) -> Path:
-    binary = tmp_path / "fake-rclone"
-    binary.write_text(FAKE_RCLONE, encoding="utf-8")
-    binary.chmod(binary.stat().st_mode | stat_module.S_IXUSR)
-    return binary
+def _fake_rclone(tmp_path: Path) -> CliFakeHarness:
+    return CliFakeHarness.create(tmp_path)
 
 
 def _run_cli(
-    binary: Path, *arguments: str, extra_environment: dict[str, str] | None = None
+    binary: CliFakeHarness, *arguments: str, extra_environment: dict[str, str] | None = None
 ) -> subprocess.CompletedProcess[str]:
-    environment = {
-        **os.environ,
-        "HMC_REMOTE": "fake:",
-        "HMC_RCLONE_PATH": str(binary),
-        **(extra_environment or {}),
-    }
-    return subprocess.run(
-        [sys.executable, "-m", "hermes_mailcloud.cli", *arguments],
-        capture_output=True,
-        text=True,
-        timeout=10,
-        env=environment,
-    )
+    return binary.run(*arguments, responses=_FILE_RESPONSES, extra_environment=extra_environment)
 
 
 def test_profile_retries_remain_available_to_safe_read_commands(tmp_path: Path) -> None:
@@ -109,7 +74,7 @@ def test_profile_retries_remain_available_to_safe_read_commands(tmp_path: Path) 
         "remote_path": "/Hermes/read-retry",
         "items": [],
     }
-    assert [json.loads(line) for line in (tmp_path / "rclone.jsonl").read_text().splitlines()] == [
+    assert binary.recorded_calls() == [
         ["lsjson", "fake:/Hermes/read-retry"],
         ["lsjson", "fake:/Hermes/read-retry"],
     ]
@@ -119,8 +84,8 @@ def test_profile_read_retries_execute_each_write_operation_once(tmp_path: Path) 
     binary = _fake_rclone(tmp_path)
     config = tmp_path / "config.toml"
     config.write_text("[profiles.default]\nretries = 1\n", encoding="utf-8")
-    call_log = tmp_path / "rclone.jsonl"
-    environment = {"FAKE_RCLONE_CALL_LOG": str(call_log)}
+    call_log = binary.calls
+    environment = {}
     upload_source = tmp_path / "upload.txt"
     upload_source.write_text("private", encoding="utf-8")
     download_target = tmp_path / "downloaded.txt"
@@ -211,8 +176,8 @@ def test_profile_read_retries_execute_each_write_operation_once(tmp_path: Path) 
 
 def test_explicit_write_retries_are_rejected_before_any_backend_call(tmp_path: Path) -> None:
     binary = _fake_rclone(tmp_path)
-    call_log = tmp_path / "rclone.jsonl"
-    environment = {"FAKE_RCLONE_CALL_LOG": str(call_log)}
+    call_log = binary.calls
+    environment = {}
     upload_source = tmp_path / "upload.txt"
     upload_source.write_text("private", encoding="utf-8")
 
@@ -367,6 +332,30 @@ def test_file_commands_emit_stable_json_from_a_real_fake_subprocess(tmp_path: Pa
     }
 
 
+def test_real_cli_transfer_keeps_unicode_spaces_and_metacharacters_literal(tmp_path: Path) -> None:
+    harness = CliFakeHarness.create(tmp_path)
+    folder = tmp_path / "space ü &;$% [literal]"
+    folder.mkdir()
+    source = folder / "input 'quoted'.txt"
+    source.write_text("private", encoding="utf-8")
+    target = folder / "output 'quoted'.txt"
+    remote = "/Hermes/private/space ü &;$%/report 'quoted'.txt"
+
+    uploaded = _run_cli(harness, "upload", str(source), remote, "--json")
+    downloaded = _run_cli(harness, "download", remote, str(target), "--json")
+
+    assert uploaded.returncode == downloaded.returncode == 0
+    assert uploaded.stderr == downloaded.stderr == ""
+    assert json.loads(uploaded.stdout)["result"]["local_path"] == str(source)
+    assert json.loads(downloaded.stdout)["result"]["local_path"] == str(target)
+    calls = harness.recorded_calls()
+    assert calls[0] == ["copyto", str(source), "fake:" + remote, "--immutable"]
+    assert calls[1][:2] == ["copyto", "fake:" + remote]
+    assert Path(calls[1][2]).parent == folder
+    assert target.read_text(encoding="utf-8") == "downloaded"
+    assert list(folder.glob("*.hermes-mailcloud-part")) == []
+
+
 def test_mkdir_dry_run_never_starts_the_fake_subprocess(tmp_path: Path) -> None:
     binary = _fake_rclone(tmp_path)
 
@@ -397,6 +386,7 @@ def test_transfer_dry_runs_never_start_the_fake_subprocess(tmp_path: Path) -> No
 def test_file_commands_return_typed_config_and_backend_errors_without_raw_output(
     tmp_path: Path,
 ) -> None:
+    binary = _fake_rclone(tmp_path)
     empty_config = tmp_path / "config.toml"
     empty_config.write_text("[profiles.default]\n", encoding="utf-8")
     no_remote = subprocess.run(
@@ -413,17 +403,17 @@ def test_file_commands_return_typed_config_and_backend_errors_without_raw_output
         capture_output=True,
         text=True,
         timeout=10,
-        env={key: value for key, value in os.environ.items() if not key.startswith("HMC_")},
+        env=isolated_environment(tmp_path),
     )
     missing_config = _run_cli(
-        _fake_rclone(tmp_path),
+        binary,
         "--config",
         str(tmp_path / "missing.toml"),
         "ls",
         "/Hermes",
         "--json",
     )
-    backend_failure = _run_cli(_fake_rclone(tmp_path), "ls", "/unexpected", "--json")
+    backend_failure = _run_cli(binary, "ls", "/unexpected", "--json")
 
     assert no_remote.returncode == 5
     assert json.loads(no_remote.stdout)["error"]["kind"] == "remote_not_configured"

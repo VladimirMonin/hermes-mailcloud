@@ -9,6 +9,7 @@ import threading
 import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import IO
 
 from ..core.errors import ErrorKind, ErrorPayload, MailCloudError
@@ -59,6 +60,8 @@ class RcloneRunner:
         """Execute literal rclone argv with bounded concurrent stream capture."""
         command = (*self._binary, *_validate_args(args))
         timeout = _validated_timeout(timeout_seconds)
+        if os.name == "nt":
+            return self._run_windows(command, timeout)
         started = time.monotonic()
         try:
             process = subprocess.Popen(
@@ -120,6 +123,30 @@ class RcloneRunner:
             duration_ms=duration_ms,
             stdout_truncated=stdout_capture.truncated,
             stderr_truncated=stderr_capture.truncated,
+        )
+
+    def _run_windows(self, command: tuple[str, ...], timeout: float) -> RcloneResult:
+        # Import only at the platform boundary; POSIX never loads Win32 bindings.
+        from ._windows_process import WindowsProcessError, run_windows_process
+
+        executable = _resolve_windows_executable(command[0], self._environment)
+        try:
+            result = run_windows_process(
+                (executable, *command[1:]),
+                environment=self._environment,
+                timeout_seconds=timeout,
+                max_capture_bytes=self._max_capture_bytes,
+                cleanup_timeout_seconds=_CLEANUP_TIMEOUT_SECONDS,
+            )
+        except WindowsProcessError as exc:
+            raise RcloneRunnerError(exc.error) from None
+        return RcloneResult(
+            result.returncode,
+            result.stdout,
+            result.stderr,
+            result.duration_ms,
+            result.stdout_truncated,
+            result.stderr_truncated,
         )
 
     def require_success(
@@ -219,6 +246,42 @@ def map_rclone_error(result: RcloneResult) -> ErrorPayload:
         message = "rclone command failed"
 
     return ErrorPayload(kind, message, {"backend_exit_code": result.returncode})
+
+
+def _resolve_windows_executable(binary: str, environment: Mapping[str, str]) -> str:
+    """Resolve only an .exe, using explicit paths or absolute supplied PATH entries.
+
+    Never consult PATHEXT, search the working directory implicitly, parse a command
+    string, or route .bat/.cmd through a shell. Prefix arguments remain separate argv.
+    """
+    path = Path(binary)
+    name = path.name
+    if path.suffix and path.suffix.casefold() != ".exe":
+        candidates: list[Path] = []
+    elif path.is_absolute():
+        candidates = [path if path.suffix else path.with_suffix(".exe")]
+    elif name == binary and not path.drive and not any(char in binary for char in ("/", "\\")):
+        executable_name = name if path.suffix else name + ".exe"
+        candidates = [
+            Path(entry) / executable_name
+            for entry in environment.get("PATH", "").split(os.pathsep)
+            if entry and Path(entry).is_absolute()
+        ]
+    else:
+        candidates = []
+    try:
+        for candidate in candidates:
+            if candidate.is_file():
+                resolved = candidate.resolve(strict=True)
+                if resolved.suffix.casefold() == ".exe":
+                    return str(resolved)
+    except OSError:
+        raise RcloneRunnerError(
+            ErrorPayload(ErrorKind.UNKNOWN_ERROR, "rclone executable could not be resolved")
+        ) from None
+    raise RcloneRunnerError(
+        ErrorPayload(ErrorKind.RCLONE_NOT_FOUND, "rclone executable was not found")
+    ) from None
 
 
 def _validate_argv_prefix(binary: str | Sequence[str]) -> tuple[str, ...]:

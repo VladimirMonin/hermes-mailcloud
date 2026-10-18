@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import threading
 import time
 from collections.abc import Sequence
 from dataclasses import dataclass, field
@@ -33,6 +34,7 @@ class DownloadBackend:
     modified_ns: int
     failure: RcloneRunnerError | None = None
     calls: list[tuple[tuple[str, ...], float | None]] = field(default_factory=list)
+    observed_modified_ns: int | None = None
 
     def require_success(
         self, args: Sequence[str], *, timeout_seconds: float | None = None
@@ -41,6 +43,7 @@ class DownloadBackend:
         temporary = Path(args[2])
         temporary.write_bytes(self.payload)
         os.utime(temporary, ns=(self.modified_ns, self.modified_ns))
+        self.observed_modified_ns = temporary.stat().st_mtime_ns
         if self.failure is not None:
             raise self.failure
         return RcloneResult(0, "", "", 1)
@@ -193,20 +196,67 @@ def test_download_timeout_cleans_partial_temp_and_preserves_existing_target(tmp_
     assert list(tmp_path.glob(".report.txt.*.hermes-mailcloud-part")) == []
 
 
-def test_download_if_newer_preserves_a_newer_local_target_and_cleans_temp(tmp_path: Path) -> None:
+@pytest.mark.parametrize("remote_offset", [-2_000_000_000, 0, 2_000_000_000])
+def test_download_if_newer_uses_distinguishable_observed_times_and_cleans_temp(
+    tmp_path: Path, remote_offset: int
+) -> None:
     destination = tmp_path / "report.txt"
-    destination.write_text("newer-local", encoding="utf-8")
-    destination_time = time.time_ns()
+    destination.write_bytes(b"local-winner")
+    destination_time = int(time.time()) * 1_000_000_000
     os.utime(destination, ns=(destination_time, destination_time))
-    backend = DownloadBackend(b"older-remote", destination_time - 1)
+    observed_local = destination.stat().st_mtime_ns
+    backend = DownloadBackend(b"remote-winner", observed_local + remote_offset)
 
     result = TransferCommands(backend, _config(), timeout_seconds=60).download(
         "/Hermes/private/report.txt", str(destination), overwrite="if-newer"
     )
 
-    assert result["updated"] is False
-    assert result["bytes"] == len(b"newer-local")
-    assert destination.read_text(encoding="utf-8") == "newer-local"
+    if remote_offset < 0:
+        assert backend.observed_modified_ns < observed_local
+    elif remote_offset > 0:
+        assert backend.observed_modified_ns > observed_local
+    else:
+        assert backend.observed_modified_ns == observed_local
+    expected = b"remote-winner" if remote_offset > 0 else b"local-winner"
+    assert result["updated"] is (remote_offset > 0)
+    assert result["bytes"] == len(expected)
+    assert destination.read_bytes() == expected
+    assert list(tmp_path.glob(".report.txt.*.hermes-mailcloud-part")) == []
+
+
+def test_download_never_keeps_a_concurrent_winner_created_during_backend_download(
+    tmp_path: Path,
+) -> None:
+    destination = tmp_path / "report.txt"
+    winner_errors: list[BaseException] = []
+
+    class RacingBackend(DownloadBackend):
+        def require_success(self, args, *, timeout_seconds=None):
+            assert not destination.exists()
+            result = super().require_success(args, timeout_seconds=timeout_seconds)
+
+            def win():
+                try:
+                    with destination.open("xb") as output:
+                        output.write(b"concurrent-winner")
+                except BaseException as exc:
+                    winner_errors.append(exc)
+
+            writer = threading.Thread(target=win)
+            writer.start()
+            writer.join(timeout=2)
+            assert not writer.is_alive()
+            assert winner_errors == []
+            return result
+
+    backend = RacingBackend(b"backend-loser", time.time_ns())
+    with pytest.raises(MailCloudError) as caught:
+        TransferCommands(backend, _config(), timeout_seconds=60).download(
+            "/Hermes/private/report.txt", str(destination), overwrite="never"
+        )
+    assert caught.value.error.kind is ErrorKind.CONFLICT
+    assert destination.read_bytes() == b"concurrent-winner"
+    assert len(backend.calls) == 1
     assert list(tmp_path.glob(".report.txt.*.hermes-mailcloud-part")) == []
 
 

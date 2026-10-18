@@ -152,13 +152,14 @@ def test_runner_timeout_kills_descendants_holding_output_pipes_promptly(tmp_path
     started = time.monotonic()
 
     with pytest.raises(RcloneRunnerError) as caught:
-        _runner().run(["timeout-descendant", str(pid_path)], timeout_seconds=0.25)
+        _runner().run(["timeout-descendant", str(pid_path)], timeout_seconds=2)
 
     elapsed = time.monotonic() - started
-    descendant_pid = int(pid_path.read_text(encoding="ascii"))
+    ready = json.loads(pid_path.read_text(encoding="ascii"))
+    assert ready["ready"] is True and ready["start_ticks"]
     assert caught.value.error.kind is ErrorKind.TIMEOUT
-    assert elapsed < 1.5
-    assert not _process_is_running(descendant_pid)
+    assert elapsed < 3.5
+    assert not _process_is_running(ready["pid"], ready["start_ticks"])
 
 
 @pytest.mark.skipif(
@@ -170,13 +171,14 @@ def test_runner_timeout_bounds_reader_drain_after_parent_exit(tmp_path: Path) ->
     started = time.monotonic()
 
     with pytest.raises(RcloneRunnerError) as caught:
-        _runner().run(["exit-with-descendant", str(pid_path)], timeout_seconds=0.1)
+        _runner().run(["exit-with-descendant", str(pid_path)], timeout_seconds=2)
 
     elapsed = time.monotonic() - started
-    descendant_pid = int(pid_path.read_text(encoding="ascii"))
+    ready = json.loads(pid_path.read_text(encoding="ascii"))
+    assert ready["ready"] is True and ready["start_ticks"]
     assert caught.value.error.kind is ErrorKind.TIMEOUT
-    assert elapsed < 1.5
-    assert not _process_is_running(descendant_pid)
+    assert elapsed < 3.5
+    assert not _process_is_running(ready["pid"], ready["start_ticks"])
 
 
 def test_fake_malformed_output_exercises_the_parser_failure_boundary() -> None:
@@ -197,9 +199,50 @@ def test_runner_bounds_both_streams_and_marks_truncation() -> None:
     assert result.stderr_truncated is True
 
 
-def _process_is_running(pid: int) -> bool:
+@pytest.mark.skipif(os.name != "nt", reason="Windows executable resolution")
+def test_windows_resolves_a_single_exe_from_only_the_supplied_path(tmp_path: Path) -> None:
+    environment = {
+        "PATH": str(Path(sys.executable).parent),
+        "SystemRoot": os.environ["SystemRoot"],
+        "PATHEXT": ".CMD;.BAT",
+    }
+    result = RcloneRunner(
+        (Path(sys.executable).stem, "-c", "import json,sys; print(json.dumps(sys.argv[1:]))"),
+        environment=environment,
+    ).run(["space ü &;|$%", "C:\\literal\\", 'a"b'], timeout_seconds=2)
+    assert result.returncode == 0
+    assert json.loads(result.stdout) == ["space ü &;|$%", "C:\\literal\\", 'a"b']
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows executable resolution")
+def test_windows_never_uses_a_shell_wrapper_or_an_implicit_current_directory(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    empty_path = tmp_path / "empty-path"
+    empty_path.mkdir()
+    (tmp_path / "shadow.exe").write_bytes(b"not-an-executable")
+    wrapper = tmp_path / "wrapper.cmd"
+    marker = tmp_path / "must-not-execute"
+    wrapper.write_text(f"echo unsafe > {marker}\n", encoding="utf-8")
+    for binary in ("shadow", str(wrapper), f"{sys.executable} --version"):
+        with pytest.raises(RcloneRunnerError) as caught:
+            RcloneRunner(
+                binary,
+                environment={
+                    "PATH": str(empty_path),
+                    "SystemRoot": os.environ["SystemRoot"],
+                },
+            ).run([], timeout_seconds=1)
+        assert caught.value.error.kind is ErrorKind.RCLONE_NOT_FOUND
+        assert "must-not-execute" not in str(caught.value)
+    assert not marker.exists()
+
+
+def _process_is_running(pid: int, start_ticks: str) -> bool:
     try:
-        state = Path(f"/proc/{pid}/stat").read_text(encoding="ascii").split()[2]
+        fields = Path(f"/proc/{pid}/stat").read_text(encoding="ascii").rsplit(")", 1)[1].split()
     except FileNotFoundError:
         return False
-    return state != "Z"
+    return fields[0] != "Z" and fields[19] == start_ticks
