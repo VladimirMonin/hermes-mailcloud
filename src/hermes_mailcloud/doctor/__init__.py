@@ -114,7 +114,11 @@ class DoctorCommands:
 
         version = self._call(("version",))
         if not version.ok:
-            warnings.append("rclone version check did not succeed; remote checks were skipped")
+            warnings.append(
+                "rclone version check did not succeed; remote checks were skipped. "
+                "Run hermes-mailcloud setup to prepare rclone; an explicit HMC_RCLONE_PATH "
+                "or profile rclone_path must be corrected separately if invalid."
+            )
             return DoctorReport(self._result("read_only", checks), tuple(warnings))
 
         checks["rclone_installed"] = True

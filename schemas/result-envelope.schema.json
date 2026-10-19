@@ -48,7 +48,38 @@
       "not": {"required": ["error"]}
     }
   ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {"operation": {"const": "setup"}, "ok": {"const": true}},
+        "required": ["operation", "ok"]
+      },
+      "then": {"properties": {"result": {"$ref": "#/$defs/setupResult"}}}
+    }
+  ],
   "$defs": {
+    "setupResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["dependency", "status", "source", "version", "cloud_configured"],
+      "properties": {
+        "dependency": {"const": "rclone"},
+        "status": {"enum": ["installed", "already_available", "dry_run"]},
+        "source": {"enum": ["managed", "external"]},
+        "version": {"type": ["string", "null"], "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+[A-Za-z0-9.+_-]*$", "maxLength": 128},
+        "cloud_configured": {"const": false}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"status": {"const": "installed"}}},
+          "then": {"properties": {"source": {"const": "managed"}}}
+        },
+        {
+          "if": {"properties": {"status": {"not": {"const": "dry_run"}}}},
+          "then": {"properties": {"version": {"type": "string"}}}
+        }
+      ]
+    },
     "error": {
       "type": "object",
       "additionalProperties": false,

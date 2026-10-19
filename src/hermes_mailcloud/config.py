@@ -12,6 +12,7 @@ from typing import Any
 from .core.errors import ErrorKind, ErrorPayload, MailCloudError
 from .core.paths import RemotePathError, normalize_remote_path, validate_rclone_remote
 from .core.policy import PUBLIC_ROOT
+from .rclone.install import external_rclone_path, managed_rclone_path
 
 DEFAULT_PROFILE = "default"
 DEFAULT_RCLONE_PATH = "rclone"
@@ -64,6 +65,7 @@ class ResolvedConfig:
     probe_public_url_after_publish: bool
     timeout_seconds: int
     retries: int
+    rclone_path_explicit: bool = False
 
 
 class ConfigError(MailCloudError):
@@ -130,17 +132,21 @@ def resolve_config(
     overwrite = _profile_choice(
         profile, "default_overwrite", "never", {"never", "always", "if-newer"}
     )
+    rclone_override = _first_not_none(env.get("HMC_RCLONE_PATH"), profile.get("rclone_path"))
+    rclone_path = _expect_str(
+        rclone_override if rclone_override is not None else DEFAULT_RCLONE_PATH, "rclone_path"
+    )
+    if rclone_override is None and external_rclone_path(DEFAULT_RCLONE_PATH, env) is None:
+        managed = managed_rclone_path(env)
+        if managed is not None:
+            rclone_path = str(managed)
 
     return ResolvedConfig(
         profile=profile_name,
         config_path=config_path,
         remote=remote,
-        rclone_path=_expect_str(
-            _first_not_none(
-                env.get("HMC_RCLONE_PATH"), profile.get("rclone_path"), DEFAULT_RCLONE_PATH
-            ),
-            "rclone_path",
-        ),
+        rclone_path=rclone_path,
+        rclone_path_explicit=rclone_override is not None,
         private_root=_normalized_profile_path(profile, "private_root", DEFAULT_PRIVATE_ROOT),
         public_root=public_root,
         temp_root=_normalized_profile_path(profile, "temp_root", DEFAULT_TEMP_ROOT),

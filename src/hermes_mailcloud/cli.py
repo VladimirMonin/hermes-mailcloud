@@ -24,6 +24,7 @@ from .config import CliConfigOverrides, ResolvedConfig, resolve_config
 from .core.errors import ErrorKind, ErrorPayload, MailCloudError
 from .core.result import ResultEnvelope
 from .doctor import DoctorCommands
+from .rclone.install import prepare_rclone
 from .rclone.runner import RcloneRunner
 
 
@@ -153,6 +154,31 @@ def version(context: typer.Context) -> None:
         )
         return
     typer.echo(__version__)
+
+
+@app.command()
+def setup(
+    context: typer.Context,
+    archive: Annotated[
+        Path | None,
+        typer.Option(
+            "--archive", help="use a local official archive with the packaged SHA-256 pin"
+        ),
+    ] = None,
+) -> None:
+    """Explicitly prepare user-scoped rclone only; never configure a cloud account."""
+    options = _options(context)
+    _run_rclone_command(
+        context,
+        "setup",
+        lambda config, _runner: prepare_rclone(
+            config.rclone_path,
+            explicit=config.rclone_path_explicit,
+            archive=archive,
+            dry_run=options.dry_run,
+            timeout_seconds=_effective_timeout(options, config),
+        ),
+    )
 
 
 @app.command()
@@ -660,6 +686,7 @@ def _emit_json_usage_error(args: Sequence[str]) -> None:
 _COMMAND_NAMES = frozenset(
     {
         "version",
+        "setup",
         "doctor",
         "ls",
         "stat",
@@ -678,6 +705,11 @@ _COMMAND_NAMES = frozenset(
 
 def _human_success(envelope: ResultEnvelope) -> str:
     result: dict[str, Any] = dict(envelope.result or {})
+    if envelope.operation == "setup":
+        return (
+            f"rclone setup: {result['status']} ({result['source']}, "
+            f"{result['version'] or 'not probed'}); cloud configuration unchanged"
+        )
     return str(result.get("version", "command completed"))
 
 
