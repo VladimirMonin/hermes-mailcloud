@@ -9,7 +9,9 @@ from pathlib import Path
 
 import jsonschema
 import pytest
+from rich.text import Text
 from tests.helpers.rclone_install import archive_fixture, environment
+from typer import rich_utils
 from typer.testing import CliRunner
 
 from hermes_mailcloud.cli import app
@@ -30,11 +32,20 @@ def isolated(monkeypatch, tmp_path):
     return values
 
 
-def test_setup_human_help_is_an_explicit_network_free_command(isolated) -> None:
+@pytest.mark.parametrize("force_terminal", [False, True])
+def test_setup_human_help_is_an_explicit_network_free_command(
+    isolated, monkeypatch, force_terminal: bool
+) -> None:
+    monkeypatch.setenv("TERM", "xterm-256color")
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    monkeypatch.setattr(rich_utils, "FORCE_TERMINAL", force_terminal)
     result = CliRunner().invoke(app, ["setup", "--help"])
     assert result.exit_code == 0, result.output
-    assert "--archive" in result.output
-    assert "rclone" in result.output
+    assert ("\x1b[" in result.output) is force_terminal
+    # Rich may style the two option dashes separately; check visible text.
+    output = Text.from_ansi(result.output).plain
+    assert "--archive" in output
+    assert "rclone" in output
 
 
 def test_setup_json_dry_run_does_not_download_or_create_user_data(isolated) -> None:
