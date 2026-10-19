@@ -237,6 +237,15 @@ https://cloud.mail.ru/public/...
 }
 ```
 
+Directory `stat` может получить от rclone metadata корня с пустыми `Path` и
+`Name`. Эта форма допустима только для `IsDir`, равного boolean `true`, при
+пустом `Path`: в результате сохраняется запрошенный нормализованный `remote_path`.
+Она не разрешает пустые имена файлов, неверные типы/пути или пустые элементы
+обычного `lsjson` listing. Parser и subprocess CLI regression checks сохраняют
+эти negative controls; отдельная gated live-проверка установленного launcher
+подтверждает directory stat/list и file stat/download. Одна классификация
+нативного provider metadata не заменяет успешный вызов приложения.
+
 ## 9. Live tests 🌐
 
 Live-тесты должны использовать только test root:
