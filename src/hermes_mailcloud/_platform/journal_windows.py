@@ -51,6 +51,10 @@ _WIN32_RESERVED_NAMES = frozenset(
 )
 
 
+class _UnlinkedPrivateFile(PrivateStorageError):
+    """A private open generation was retired before its validation completed."""
+
+
 def _reject_win32_alias_components(path: Path) -> None:
     current = Path(path.anchor)
     for part in path.parts[1:]:
@@ -336,9 +340,12 @@ def _assert_private_file_handle(handle: int) -> None:
     number_of_links = information[7]
     if attributes & win32con.FILE_ATTRIBUTE_REPARSE_POINT:
         raise PrivateStorageError(_UNSAFE_LINK)
-    if attributes & win32con.FILE_ATTRIBUTE_DIRECTORY or number_of_links != 1:
+    if attributes & win32con.FILE_ATTRIBUTE_DIRECTORY or number_of_links not in (0, 1):
         raise PrivateStorageError("local link journal is not a private regular file")
     _assert_private_security(handle, directory=False)
+    if number_of_links == 0:
+        # Never accept an unlinked handle, even when its owner/DACL are private.
+        raise _UnlinkedPrivateFile("local link journal is not a private regular file")
 
 
 def assert_private_regular_file(path: Path, *, allow_missing: bool) -> None:
@@ -354,34 +361,51 @@ def assert_private_regular_file(path: Path, *, allow_missing: bool) -> None:
         if allow_missing:
             return
         raise PrivateStorageError("local link journal is not a private regular file")
-    try:
-        _assert_private_file_handle(handle)
-    finally:
-        win32file.CloseHandle(handle)
+    win32file.CloseHandle(handle)
 
 
 def _open_private_file_with_transient_retry(path: Path) -> int | None:
-    """Retry only bounded native replacement/missing transients, never security failures."""
+    """Return a fully validated handle within one bounded replacement retry budget."""
     deadline = time.monotonic() + _TRANSIENT_OPEN_TIMEOUT_SECONDS
+    saw_unlinked = False
+    cause: BaseException | None = None
     while True:
+        transient_error = None
+        reopen_now = False
         try:
-            return _open_handle(
-                path,
-                win32con.GENERIC_READ | win32con.READ_CONTROL,
-            )
+            handle = _open_handle(path, win32con.GENERIC_READ | win32con.READ_CONTROL)
         except pywintypes.error as exc:
             if exc.winerror not in _TRANSIENT_OPEN_ERRORS:
                 raise PrivateStorageError(
                     "local link journal is not a private regular file"
                 ) from exc
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                if exc.winerror == _ERROR_SHARING_VIOLATION:
-                    raise PrivateStorageError(
-                        "local link journal could not be read safely"
-                    ) from exc
-                return None
-            time.sleep(min(_TRANSIENT_OPEN_RETRY_SECONDS, remaining))
+            transient_error = exc.winerror
+            cause = exc
+        else:
+            validated = False
+            try:
+                try:
+                    _assert_private_file_handle(handle)
+                except _UnlinkedPrivateFile as exc:
+                    reopen_now = not saw_unlinked
+                    saw_unlinked = True
+                    cause = exc
+                else:
+                    validated = True
+                    return handle
+            finally:
+                if not validated:
+                    win32file.CloseHandle(handle)
+        # A descheduled first open may already be retired on return. Give that
+        # case one immediate fresh validation; never reset the retry deadline.
+        if reopen_now:
+            continue
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            if saw_unlinked or transient_error == _ERROR_SHARING_VIOLATION:
+                raise PrivateStorageError("local link journal could not be read safely") from cause
+            return None
+        time.sleep(min(_TRANSIENT_OPEN_RETRY_SECONDS, remaining))
 
 
 def read_private_bytes(path: Path, *, max_bytes: int) -> bytes:
@@ -391,7 +415,6 @@ def read_private_bytes(path: Path, *, max_bytes: int) -> bytes:
     if handle is None:
         return b""
     try:
-        _assert_private_file_handle(handle)
         chunks: list[bytes] = []
         total = 0
         while True:

@@ -157,6 +157,106 @@ def test_concurrent_readers_see_only_nonempty_complete_old_or_new_versions(
     assert not invalid
 
 
+@pytest.mark.skipif(os.name != "nt", reason="native Windows replacement handles")
+@pytest.mark.parametrize("replacement", ["private", "hardlink", "broad_dacl"])
+def test_reader_revalidates_a_generation_replaced_after_open(
+    tmp_path: Path, monkeypatch, replacement: str
+) -> None:
+    from helpers.journal_worker import broaden_capability
+    from hermes_mailcloud._platform import journal_windows as backend
+
+    path = _journal_path(tmp_path)
+    LinkJournal(path).record("publish", "/Hermes/public/seed.txt", PublicLink(PUBLIC_URL))
+    seed = path.read_bytes()
+    opened = threading.Event()
+    resume = threading.Event()
+    snapshots: list[bytes] = []
+    failures: list[Exception] = []
+    opened_ids: list[tuple[int, ...]] = []
+    closed_ids: list[tuple[int, ...]] = []
+    after_replace: list[tuple[int, int]] = []
+    reads: list[int] = []
+    original_open = backend._open_handle
+    original_close = backend.win32file.CloseHandle
+    original_read = backend.win32file.ReadFile
+
+    def identity(handle) -> tuple[int, ...]:
+        info = backend.win32file.GetFileInformationByHandle(handle)
+        return (info[4], info[8], info[9])
+
+    def pause_after_open(file_path, *args, **kwargs):
+        handle = original_open(file_path, *args, **kwargs)
+        if threading.current_thread() is reader and Path(file_path) == path:
+            opened_ids.append(identity(handle))
+            if len(opened_ids) == 1:
+                try:
+                    backend._assert_private_file_handle(handle)
+                    opened.set()
+                    assert resume.wait(10)
+                    info = backend.win32file.GetFileInformationByHandle(handle)
+                    after_replace.append((info[0], info[7]))
+                except BaseException:
+                    original_close(handle)
+                    raise
+        return handle
+
+    def track_close(handle):
+        if threading.current_thread() is reader:
+            try:
+                file_id = identity(handle)
+            except backend.pywintypes.error:
+                pass  # Token handles are not disk-file handles.
+            else:
+                if file_id in opened_ids:
+                    closed_ids.append(file_id)
+        return original_close(handle)
+
+    def track_read(handle, *args, **kwargs):
+        if threading.current_thread() is reader:
+            reads.append(1)
+        return original_read(handle, *args, **kwargs)
+
+    def read_once() -> None:
+        try:
+            snapshots.append(journal_module._read_private_journal(path))
+        except Exception as exc:
+            failures.append(exc)
+
+    reader = threading.Thread(target=read_once)
+    monkeypatch.setattr(backend, "_open_handle", pause_after_open)
+    monkeypatch.setattr(backend.win32file, "CloseHandle", track_close)
+    monkeypatch.setattr(backend.win32file, "ReadFile", track_read)
+    reader.start()
+    try:
+        assert opened.wait(10)
+        LinkJournal(path).record("publish", "/Hermes/public/next.txt", PublicLink(PUBLIC_URL))
+        final = path.read_bytes()
+        assert final.startswith(seed) and len(final.splitlines()) == 2
+        if replacement == "hardlink":
+            os.link(path, path.with_name("second-link.jsonl"))
+        elif replacement == "broad_dacl":
+            broaden_capability(path)
+    finally:
+        resume.set()
+        reader.join(10)
+
+    assert not reader.is_alive()
+    assert len(after_replace) == 1 and after_replace[0][1] == 0
+    assert not after_replace[0][0] & (
+        backend.win32con.FILE_ATTRIBUTE_DIRECTORY | backend.win32con.FILE_ATTRIBUTE_REPARSE_POINT
+    )
+    assert len(opened_ids) == 2 and opened_ids[0] != opened_ids[1]
+    assert closed_ids == opened_ids
+    if replacement == "private":
+        assert not failures
+        assert snapshots == [final] and reads
+    else:
+        assert len(failures) == 1 and isinstance(failures[0], JournalError)
+        assert not snapshots and not reads
+        if replacement == "broad_dacl":
+            assert "DACL" in str(failures[0])
+
+
 def test_lock_is_released_when_a_holder_exits_or_crashes(tmp_path: Path) -> None:
     path = _journal_path(tmp_path)
     LinkJournal(path).record("publish", "/Hermes/public/seed.txt", PublicLink(PUBLIC_URL))

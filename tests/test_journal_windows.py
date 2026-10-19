@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -177,6 +178,93 @@ def test_windows_temporary_capability_file_is_private_and_removed(tmp_path: Path
         win32file.CloseHandle(handle)
         backend._delete_quietly(temporary)
     assert not temporary.exists()
+
+
+@pytest.mark.parametrize("scenario", ["slow_first_open", "retired_again", "missing", "broad_dacl"])
+def test_windows_retired_generation_retry_is_bounded_and_revalidates_privacy(
+    tmp_path: Path, monkeypatch, scenario: str
+) -> None:
+    path = _journal_path(tmp_path)
+    LinkJournal(path).record("publish", "/Hermes/public/seed.txt", PublicLink(PUBLIC_URL))
+    seed = path.read_bytes()
+    clock = [0.0]
+    sleeps: list[float] = []
+    opened: list[tuple[int, ...]] = []
+    closed: list[tuple[int, ...]] = []
+    reads: list[int] = []
+    nested = False
+    original_open = backend._open_handle
+    original_close = win32file.CloseHandle
+    original_read = win32file.ReadFile
+
+    def identity(handle) -> tuple[int, ...]:
+        info = win32file.GetFileInformationByHandle(handle)
+        return (info[4], info[8], info[9])
+
+    def retire_before_validation(file_path, *args, **kwargs):
+        nonlocal nested
+        handle = original_open(file_path, *args, **kwargs)
+        if Path(file_path) == path and not nested:
+            opened.append(identity(handle))
+            if len(opened) == 1 or scenario == "retired_again":
+                try:
+                    nested = True
+                    LinkJournal(path).record(
+                        "publish", "/Hermes/public/replacement.txt", PublicLink(PUBLIC_URL)
+                    )
+                    assert win32file.GetFileInformationByHandle(handle)[7] == 0
+                    if scenario == "missing":
+                        path.unlink()
+                    elif scenario == "broad_dacl":
+                        _set_null_dacl(path)
+                    clock[0] += 0.06 if scenario == "slow_first_open" else 0.03
+                except BaseException:
+                    original_close(handle)
+                    raise
+                finally:
+                    nested = False
+        return handle
+
+    def track_close(handle):
+        if not nested:
+            try:
+                file_id = identity(handle)
+            except backend.pywintypes.error:
+                pass
+            else:
+                if file_id in opened:
+                    closed.append(file_id)
+        return original_close(handle)
+
+    def track_read(handle, *args, **kwargs):
+        if not nested:
+            reads.append(1)
+        return original_read(handle, *args, **kwargs)
+
+    def sleep(seconds: float) -> None:
+        sleeps.append(seconds)
+        clock[0] += seconds
+
+    monkeypatch.setattr(backend, "time", SimpleNamespace(monotonic=lambda: clock[0], sleep=sleep))
+    monkeypatch.setattr(backend, "_open_handle", retire_before_validation)
+    monkeypatch.setattr(win32file, "CloseHandle", track_close)
+    monkeypatch.setattr(win32file, "ReadFile", track_read)
+    if scenario == "slow_first_open":
+        snapshot = journal_module._read_private_journal(path)
+        assert snapshot == path.read_bytes() and snapshot.startswith(seed)
+        assert len(snapshot.splitlines()) == 2 and reads
+        assert len(opened) == 2 and not sleeps
+    else:
+        with pytest.raises(JournalError) as caught:
+            journal_module._read_private_journal(path)
+        assert not reads
+        if scenario == "broad_dacl":
+            assert "DACL" in str(caught.value) and len(opened) == 2 and not sleeps
+        else:
+            assert str(caught.value) == "local link journal could not be read safely"
+            assert len(opened) == (2 if scenario == "retired_again" else 1)
+            assert clock[0] <= 0.06
+    assert closed == opened
 
 
 def test_windows_persistent_sharing_violation_is_not_hidden(tmp_path: Path) -> None:
