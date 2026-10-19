@@ -8,12 +8,12 @@
 
 - [`00-research-summary.md`](00-research-summary.md) — research summary.
 - [`01-architecture.md`](01-architecture.md) — target architecture and boundaries.
-- [`02-command-contract.md`](02-command-contract.md) — proposed CLI contract.
+- [`02-command-contract.md`](02-command-contract.md) — frozen CLI contract, explicit dependency setup, and labeled future proposals.
 - [`03-development-plan.md`](03-development-plan.md) — implementation waves.
 - [`04-probe-plan.md`](04-probe-plan.md) — implemented safe probe harness and planned live capability evidence.
 - [`05-safety-model.md`](05-safety-model.md) — safety model.
 - [`06-testing-strategy.md`](06-testing-strategy.md) — offline-first and opt-in live testing.
-- [`07-agent-integration.md`](07-agent-integration.md) — proposed agent-facing behavior.
+- [`07-agent-integration.md`](07-agent-integration.md) — agent invocation, JSON/error handling, safety rules, and labeled future proposals.
 - [`08-configuration-and-secrets.md`](08-configuration-and-secrets.md) — configuration and secret boundaries.
 - [`09-known-risks.md`](09-known-risks.md) — known risks.
 - [`10-v0.1-release-notes.md`](10-v0.1-release-notes.md) — supported surface, package and CI release gates.

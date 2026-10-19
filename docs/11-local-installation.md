@@ -88,12 +88,13 @@ selects `312`. Do not copy bindings manually or use MSYS/WSL permission emulatio
 as a replacement for native Windows ACLs. Linux does not require pywin32.
 See [third-party notices](../THIRD_PARTY_NOTICES.md#pywin32-notices).
 
-Local clean-wheel, real console-launcher and fake-backed file/public/batch
-checks cover Windows/Linux with Python 3.12 and 3.13, including the native journal
+Local full offline, clean-wheel, real console-launcher and fake-backed
+file/public/batch checks cover Windows/Linux with Python 3.12 and 3.13, including the native journal
 and subprocess boundary. The Windows checks used elevated processes: genuine
-ordinary-user Windows qualification and a remote GitHub Actions matrix remain
-unqualified. Official default HTTPS setup, managed discovery and real local-file
-rclone use are checked separately from fake-backed scenarios. See the
+ordinary-user Windows qualification remains incomplete. Evaluate remote GitHub
+Actions separately for the exact commit. Official default HTTPS setup, managed
+discovery and real local-file rclone use are checked separately from fake-backed
+scenarios. See the
 [portable package smoke](../README.md#package-smoke-test) for isolated wheel
 validation; it is distinct from installing the operational command above and
 does not prove Mail.ru access or complete release readiness.
@@ -113,6 +114,12 @@ chmod 600 ~/.config/hermes-mailcloud/config.toml
 ```
 
 ### Windows configuration
+
+Use an ordinary per-user agent/CLI context by default. Elevated test coverage is
+not evidence that Administrator rights are required, nor proof of ordinary-user
+compatibility. On a permission failure, diagnose the exact selected executable,
+configuration/journal path and supported ACL boundary using redacted errors; do
+not automatically relaunch the whole agent as Administrator.
 
 The Bash/chmod example above is POSIX-only. On Windows, create the same
 `[profiles.default]` configuration in a text editor as UTF-8 **without BOM**,
@@ -192,10 +199,22 @@ true. Read-only doctor does not configure or mutate the cloud. See
 
 ```bash
 hermes-mailcloud ls / --json
+hermes-mailcloud stat /Hermes/private --json
+hermes-mailcloud mkdir /Hermes/private/reports --json
 hermes-mailcloud upload ./report.pdf /Hermes/private/report.pdf --json
 hermes-mailcloud download /Hermes/private/report.pdf ./report.downloaded.pdf --json
 hermes-mailcloud publish ./report.pdf /Hermes/public/report.pdf --json --yes
+hermes-mailcloud link /Hermes/public/report.pdf --json
 ```
+
+`stat` accepts a file or directory path. `publish` uploads a local file; `link`
+gets or creates a public link for an existing remote item. Both require the
+public-root policy and owner-private journal. Normal JSON returns a fingerprint,
+not the raw capability URL. An HTTP success may describe an HTML landing page,
+not downloaded document bytes; direct-download resolution and revoke/unlink are
+not shipped. See [agent integration](07-agent-integration.md) and
+[public-link risks](09-known-risks.md#31-public-url-не-равен-direct-download-url).
+These are user-operation examples, not a grant to mutate those paths in tests.
 
 Use `--dry-run` before writes when the command supports it. Destructive operations require exact paths and explicit confirmation. The complete command contract is in [`02-command-contract.md`](02-command-contract.md).
 

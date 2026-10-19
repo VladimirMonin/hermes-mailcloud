@@ -25,9 +25,9 @@ version: 1.0.0
 2. Read `ok`, `result`/`error`, and the process exit code; do not parse pretty output.
 3. For writes, use `--dry-run` first when supported. Never automatically retry an ambiguous write.
 4. Add `--yes` only for confirmation-gated operations such as `rm`, `publish`, write-batch, and live doctor.
-5. Keep test mutations in a unique `/TEST/<run-id>/`; test publications belong under `/Hermes/public/TEST/` because public paths are policy-restricted.
-6. Verify mutations by read-back: `stat`/`ls`, size and SHA-256 for transfers, HTTP/browser check for public links.
-7. Return a raw public URL only to the requesting owner. Never store it in Git, shared logs, Kanban, or public artifacts.
+5. Keep test mutations in the authorized unique `/TEST/<run-id>/`. A path there does not satisfy the `/Hermes/public` publication policy; that policy does not itself authorize a different test root. If both constraints cannot be met, stop and request an explicit owner decision; do not broaden either scope.
+6. Verify mutations by read-back: `stat`/`ls`, size and SHA-256 for transfers. A bounded public-link HTTP/browser check may prove only an HTML landing page, not document-byte download or revocation.
+7. Normal JSON returns a public-link fingerprint; the raw capability remains in the owner-private journal. Share only fingerprints in handoffs. Never put raw URLs in Git, chat, shared logs, Kanban, or public artifacts.
 8. Delete local or cloud files only when the user explicitly requested that exact cleanup.
 
 ## Large files

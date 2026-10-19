@@ -46,7 +46,7 @@ direct download URL
 |---|---:|---:|---:|---|
 | `rclone link` перестанет работать | низкая/средняя | высокое | P1 | live doctor + fallback research |
 | `unlink` не поддержан rclone backend | средняя | среднее | P1 | record unsupported; no v0.1 fallback |
-| public URL не direct download | высокая | среднее | P1 | отдельная команда `resolve` |
+| public URL не direct download | высокая | среднее | P1 | не обещать document-byte download; `resolve` — только post-v0.1 proposal |
 | `--expire` не работает | высокая | низкое/среднее | P2 | не обещать в v0.1 |
 | пароль на папку не автоматизируется | средняя | низкое | P3 | отложить |
 | лимит 3000 ссылок | средняя | среднее | P2 | links journal + audit |
@@ -76,8 +76,8 @@ https://cloud.mail.ru/public/...
 Митигация:
 
 ```text
-v0.1: возвращать public_url
-v0.2: добавить resolve public URL
+v0.1: JSON возвращает public_url_fingerprint; raw URL остаётся в private journal
+v0.2 proposal: добавить resolve public URL
 v0.2/v0.3: добавить direct_download_url, если найден стабильный способ
 ```
 
@@ -88,9 +88,9 @@ v0.2/v0.3: добавить direct_download_url, если найден стаб�
 Митигация:
 
 ```text
-после publish опционально делать HEAD/GET probe
-в JSON возвращать download_mode
-не обещать direct download без проверки
+v0.1: доступность HTML landing page не доказывает скачивание document bytes
+post-v0.1 proposal: direct-download classification и поле download_mode
+не обещать direct download без отдельной проверки
 ```
 
 ### 3.3. Лимит публичных ссылок
@@ -120,7 +120,7 @@ Mail.ru указывает лимит до 3000 ссылок на файлы. П
 ```text
 не считать unlink частью v0.1 MVP
 сначала 03_unlink_probe.py
-если rclone unsupported — private API file/unpublish
+если rclone unsupported — сообщить unsupported; private API fallback запрещён в v0.1
 ```
 
 Статус:
@@ -249,7 +249,7 @@ Rclone документация для Mail.ru backend указывает огр
 | remote не настроен | exit code 5 | отдельный интерактивный `config` выбранного rclone; `setup` не настраивает аккаунт |
 | auth failed | exit code 6 | проверить app password |
 | network timeout | exit code 14 | retry only explicitly safe read-only work |
-| rate limit | exit code 10 | повторить позже |
+| rate limit | exit code 10 | повторять только явно безопасную read-only операцию; ambiguous write не повторять |
 | corrupted stdout | parse error | включить `--debug` |
 
 ## 12. Риски для агента 🤖

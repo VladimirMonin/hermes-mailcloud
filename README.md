@@ -19,14 +19,15 @@ Agent CLI for Mail.ru Cloud — rclone-backed, JSON-first, safety-aware.
 The `v0.1.0a0` tag identifies the `0.1.0a0` alpha source snapshot. A source
 tag is not a GitHub Release, a PyPI upload, or a claim of production readiness.
 The tag is a historical snapshot; current sources include POSIX and native
-Windows journal and subprocess backends. Local clean-wheel, real-launcher and
+Windows journal and subprocess backends. Local full offline, clean-wheel, real-launcher and
 fake-backed runtime checks cover Windows/Linux with Python 3.12 and 3.13. The
 Windows checks used elevated processes, not ordinary-user qualification.
 Explicit installed setup, managed discovery and real rclone local-file operations
 are checked on those targets; default official HTTPS acquisition is checked on
-both OSes. Genuine non-admin Windows and a remote GitHub Actions matrix remain
-unqualified. Local/fake-backed checks do not prove Mail.ru access. See the
-[Windows boundaries and limits](docs/11-local-installation.md#windows-configuration).
+both OSes. Genuine ordinary-user Windows qualification remains incomplete;
+elevated checks do not establish an Administrator requirement. Remote GitHub
+Actions results must be checked for the specific commit. Local/fake-backed
+checks do not prove Mail.ru access. See the [Windows boundaries and limits](docs/11-local-installation.md#windows-configuration).
 
 ## Quick start (development)
 
