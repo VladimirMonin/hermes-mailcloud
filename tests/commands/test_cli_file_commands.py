@@ -250,6 +250,38 @@ def test_explicit_write_retries_are_rejected_before_any_backend_call(tmp_path: P
     assert not call_log.exists()
 
 
+def test_cli_directory_stat_preserves_requested_path_with_empty_root_metadata(
+    tmp_path: Path,
+) -> None:
+    binary = _fake_rclone(tmp_path)
+    remote_path = "/TEST/synthetic-directory"
+    response = {
+        "Path": "",
+        "Name": "",
+        "IsDir": True,
+        "Size": -3,
+        "ModTime": "2026-01-02T03:04:05Z",
+    }
+    inspected = binary.run(
+        "stat",
+        remote_path,
+        "--json",
+        responses={
+            json.dumps(["lsjson", "fake:" + remote_path, "--stat", "--hash"]): {
+                "stdout": json.dumps(response)
+            }
+        },
+    )
+
+    assert inspected.returncode == 0
+    assert inspected.stderr == ""
+    assert json.loads(inspected.stdout)["result"] == {
+        "remote_path": remote_path,
+        "type": "directory",
+        "modified": "2026-01-02T03:04:05Z",
+    }
+
+
 def test_file_commands_emit_stable_json_from_a_real_fake_subprocess(tmp_path: Path) -> None:
     binary = _fake_rclone(tmp_path)
     upload_source = tmp_path / "upload.txt"

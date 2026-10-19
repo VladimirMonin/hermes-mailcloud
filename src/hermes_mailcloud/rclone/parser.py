@@ -137,7 +137,10 @@ def _parse_stat_item(raw: Mapping[str, object], *, remote_path: str) -> dict[str
         provider_path not in {"", "."} and not _is_safe_relative_path(provider_path)
     ):
         raise RcloneParseError("rclone stat item path was invalid")
-    if not isinstance(name, str) or not name:
+    # Directory --stat can describe its filesystem root with empty Path and Name.
+    if not isinstance(name, str) or (
+        not name and not (is_directory is True and provider_path == "")
+    ):
         raise RcloneParseError("rclone stat item name was invalid")
     if not isinstance(is_directory, bool):
         raise RcloneParseError("rclone stat item directory flag was invalid")

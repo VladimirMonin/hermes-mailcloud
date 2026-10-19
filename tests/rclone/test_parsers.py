@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -50,6 +51,58 @@ def test_parse_stat_normalizes_optional_hash_metadata_from_a_golden_fixture() ->
         "modified": "2026-07-25T01:02:03Z",
         "hashes": {"MD5": "0123456789abcdef0123456789abcdef"},
     }
+
+
+@pytest.mark.parametrize("remote_path", ["/TEST/synthetic-directory", "/"])
+def test_parse_stat_accepts_empty_root_metadata_for_requested_directory(remote_path: str) -> None:
+    # Live classification established empty string Path/Name, boolean IsDir=true,
+    # negative integer Size and a nonempty string ModTime. Other values are synthetic.
+    stdout = json.dumps(
+        {"Path": "", "Name": "", "IsDir": True, "Size": -3, "ModTime": "2026-01-02T03:04:05Z"}
+    )
+
+    assert parse_stat(stdout, remote_path=remote_path) == {
+        "remote_path": remote_path,
+        "type": "directory",
+        "modified": "2026-01-02T03:04:05Z",
+    }
+
+
+@pytest.mark.parametrize(
+    "override",
+    [
+        {"IsDir": False, "Size": 0},
+        {"IsDir": 0},
+        {"IsDir": 1},
+        {"IsDir": "true"},
+        {"IsDir": None},
+        {"Path": "."},
+        {"Path": "reports"},
+        {"Path": "../escape"},
+        {"Name": None},
+        {"Name": False},
+        {"Name": 0},
+        {"Name": []},
+        {"Name": {}},
+        {"ModTime": 12},
+        {"ModTime": ""},
+    ],
+)
+def test_parse_stat_empty_directory_exception_keeps_other_guards(override: dict) -> None:
+    payload = {"Path": "", "Name": "", "IsDir": True} | override
+    with pytest.raises(RcloneParseError) as caught:
+        parse_stat(json.dumps(payload), remote_path="/TEST/synthetic-directory")
+    assert caught.value.error.kind is ErrorKind.PARSE_ERROR
+
+
+def test_parse_stat_still_rejects_missing_directory_name() -> None:
+    with pytest.raises(RcloneParseError):
+        parse_stat('{"Path":"","IsDir":true}', remote_path="/TEST/synthetic-directory")
+
+
+def test_parse_lsjson_still_rejects_empty_directory_root_listing_item() -> None:
+    with pytest.raises(RcloneParseError):
+        parse_lsjson('[{"Path":"","Name":"","IsDir":true}]', root="/TEST/synthetic-directory")
 
 
 def test_parse_stat_rejects_bad_provider_metadata_without_echoing_it() -> None:
