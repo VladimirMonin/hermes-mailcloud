@@ -100,7 +100,7 @@ wheels = [
 
 [[package]]
 name = "hermes-mailcloud"
-version = "0.1.0a0"
+version = "0.1.0a1"
 source = { editable = "." }
 dependencies = [
     { name = "pywin32", marker = "sys_platform == 'win32'" },

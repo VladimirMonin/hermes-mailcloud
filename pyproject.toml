@@ -1,6 +1,6 @@
 [project]
 name = "hermes-mailcloud"
-version = "0.1.0a0"
+version = "0.1.0a1"
 description = "Agent CLI for Mail.ru Cloud — rclone-backed, JSON-first, safety-aware"
 readme = "README.md"
 license = "MIT"

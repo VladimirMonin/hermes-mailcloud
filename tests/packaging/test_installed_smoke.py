@@ -12,6 +12,7 @@ import shutil
 import subprocess
 import sys
 import tarfile
+import textwrap
 import time
 import uuid
 import zipfile
@@ -33,6 +34,40 @@ def test_ci_covers_both_target_oses_and_python_versions_without_bash_smoke() -> 
     assert "scripts/smoke_installed.py" in workflow
     assert "mktemp" not in workflow and "env -i" not in workflow and "trap " not in workflow
     assert "secrets." not in workflow
+
+
+def test_ci_job_environment_uses_only_pre_runner_contexts() -> None:
+    # GitHub rejects runner/steps/env contexts here before it can create jobs.
+    # https://docs.github.com/en/actions/reference/workflows-and-actions/contexts
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    job_environments = re.findall(r"(?m)^    env:\n((?:      .*\n)+)", workflow)
+    assert job_environments
+    available = {"github", "needs", "strategy", "matrix", "vars", "secrets", "inputs"}
+    for environment in job_environments:
+        for expression in re.findall(r"\$\{\{(.*?)\}\}", environment, re.DOTALL):
+            references = set(re.findall(r"\b([A-Za-z_]\w*)\s*[.\[]", expression))
+            assert references <= available, references - available
+
+
+def test_ci_uv_cache_is_selected_after_runner_start(tmp_path: Path, monkeypatch) -> None:
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    runtime = workflow.split("\n  runtime:\n", 1)[1]
+    name = "- name: Select runner-local uv cache\n"
+    assert runtime.index(name) < runtime.index("uses: astral-sh/setup-uv@")
+    assert runtime.index(name) < runtime.index("uv sync --locked")
+    step = runtime.split(name, 1)[1].split("\n      - ", 1)[0]
+    assert "shell: python" in step
+    source = textwrap.dedent(step.split("run: |\n", 1)[1])
+    runner_temp = tmp_path / "runner temp Ж"
+    environment_file = tmp_path / "github-env.txt"
+    monkeypatch.setenv("RUNNER_TEMP", str(runner_temp))
+    monkeypatch.setenv("GITHUB_ENV", str(environment_file))
+
+    exec(compile(source, "<CI cache bootstrap>", "exec"), {})
+
+    assert environment_file.read_text(encoding="utf-8") == (
+        f"UV_CACHE_DIR={runner_temp / 'mailcloud-uv-cache'}\n"
+    )
 
 
 def test_ci_test_packs_are_a_disjoint_cover_of_all_test_modules() -> None:
