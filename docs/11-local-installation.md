@@ -184,6 +184,16 @@ POSIX execution retains its separate process-group cleanup.
 
 ### Windows storage limits
 
+Atomic replacement can retire a journal generation after a reader opens it.
+A handle observed with zero links is never accepted: it is closed, and the
+current path is reopened with full regular-file, link-count, owner and protected
+DACL validation before reading. Hardlinks, reparse files and invalid security
+remain refusals, not retirement retries. The first observed retirement permits
+one immediate fresh validation; further retries share the original 50ms budget
+without resetting it. Missing/expired reads after retirement fail closed rather
+than returning an empty journal. This bounds retries, not OS or scheduler delay,
+and does not guarantee progress under continuous replacement.
+
 The journal flushes its private temporary file and performs same-directory
 replacement. Windows flushing/replacement is not a promise of POSIX-equivalent
 directory fsync or power-loss durability. An error before replacement preserves
