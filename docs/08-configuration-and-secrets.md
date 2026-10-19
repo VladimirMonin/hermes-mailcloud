@@ -34,11 +34,12 @@ Mail.ru app password
 
 ## 2. Rclone remote 🔐
 
-Создание remote:
-
-```bash
-rclone config
-```
+Сначала агент устанавливает Python-пакет и явно выполняет `hermes-mailcloud setup`;
+это готовит зависимость, но не создаёт remote. Облачная настройка — отдельный
+интерактивный `config` у уже выбранного rclone (external или managed), с вводом
+секретов непосредственно в rclone, не в CLI argv/чат. Агент не требует искать
+executable или менять PATH; порядок установки и выбора бинарника описан в
+[local installation](11-local-installation.md#3-configure-mailru-separately).
 
 Рекомендуемый remote name:
 
@@ -52,11 +53,11 @@ mailru
 mailru:
 ```
 
-Проверка:
+После настройки remote read-only проверка выполняется обычным CLI, который
+сам находит подготовленную копию:
 
 ```bash
-rclone lsd mailru:
-rclone about mailru:
+hermes-mailcloud --remote mailru: --json doctor
 ```
 
 > [!note]
@@ -78,7 +79,8 @@ does not substitute a separate `%APPDATA%` default.
 ```toml
 [profiles.default]
 remote = "mailru:"
-rclone_path = "rclone"
+# Omit rclone_path to allow external-PATH -> managed fallback after setup.
+# A configured rclone_path is always an explicit executable override.
 
 private_root = "/Hermes/private"
 public_root = "/Hermes/public"
@@ -149,6 +151,15 @@ hermes-mailcloud --profile work --remote mailru-test: doctor --json
 ```
 
 `--remote` переопределяет remote из профиля.
+
+Для executable порядок: explicit `HMC_RCLONE_PATH` → explicit profile
+`rclone_path` → внешний `rclone` в supplied PATH → проверенная managed copy.
+Даже значение `rclone_path = "rclone"` считается explicit: если оно ошибочно,
+setup/обычные команды не заменяют его managed fallback. Для managed режима
+оставьте ключ незаданным; существующие overrides не переписываются автоматически.
+Read-only lookup ничего не скачивает и не создаёт. Явный `setup` хранит binary
+в per-user data, не в config/site-packages; пути и ограничения —
+[Prepare rclone](11-local-installation.md#prepare-rclone).
 
 ## 6. Переменные окружения 🌱
 

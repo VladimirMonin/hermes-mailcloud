@@ -52,8 +52,8 @@ direct download URL
 | лимит 3000 ссылок | средняя | среднее | P2 | links journal + audit |
 | случайная публикация личного файла | средняя | критическое | P0 | public root + deny patterns |
 | утечка app password в лог | низкая/средняя | критическое | P0 | sanitization + tests |
-| rclone не установлен | средняя | среднее | P1 | `doctor` и понятная ошибка |
-| remote не настроен | средняя | среднее | P1 | `doctor` и setup docs |
+| rclone не установлен | средняя | среднее | P1 | read-only `doctor`, затем явный `setup`; invalid explicit path исправить отдельно |
+| remote не настроен | средняя | среднее | P1 | `doctor` и отдельная настройка remote, не dependency `setup` |
 
 ## 3. Риски публичных ссылок 🔗
 
@@ -245,8 +245,8 @@ Rclone документация для Mail.ru backend указывает огр
 
 | Риск | Симптом | Что делать |
 |---|---|---|
-| нет rclone | exit code 4 | установить rclone |
-| remote не настроен | exit code 5 | `rclone config` |
+| нет rclone | exit code 4 | агент запускает `hermes-mailcloud setup`; invalid explicit override не обходится |
+| remote не настроен | exit code 5 | отдельный интерактивный `config` выбранного rclone; `setup` не настраивает аккаунт |
 | auth failed | exit code 6 | проверить app password |
 | network timeout | exit code 14 | retry only explicitly safe read-only work |
 | rate limit | exit code 10 | повторить позже |

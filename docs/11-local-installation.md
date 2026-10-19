@@ -6,8 +6,10 @@ This guide installs a stable, non-editable `hermes-mailcloud` command and an opt
 
 - Git access to this repository.
 - [`uv`](https://docs.astral.sh/uv/) in `PATH`.
-- [`rclone`](https://rclone.org/install/) in `PATH`.
-- A Mail.ru external-application password for the account being configured.
+- Official HTTPS access for explicit dependency preparation, or the matching
+  pinned official archive for offline setup. No preinstalled rclone/PATH step.
+- A Mail.ru external-application password only for the separate cloud-account
+  configuration, not package installation or dependency setup.
 
 Clone the repository and enter it:
 
@@ -20,37 +22,65 @@ The repository is public and can be cloned without a repository invitation.
 Before contributing, configure a GitHub-provided noreply address for this
 repository and follow the [repository privacy guidance](../README.md#repository-privacy).
 
-## 2. Configure Mail.ru in rclone
-
-Run:
-
-```bash
-rclone config
-```
-
-Create a Mail.ru Cloud remote named `mailru`. Store the account login and external-application password only in the private rclone configuration. Do not put credentials in this repository or in the `hermes-mailcloud` config.
-
-Verify the remote:
-
-```bash
-rclone lsd mailru:
-rclone about mailru:
-```
-
-See [`08-configuration-and-secrets.md`](08-configuration-and-secrets.md) for the full credential and configuration boundary.
-
-## 3. Install the stable CLI
+## 2. Install the stable CLI and dependency
 
 From the repository root:
 
 ```bash
 uv tool install --python 3.12 .
+hermes-mailcloud --json setup
+hermes-mailcloud --json doctor
 ```
 
 Do not use `--editable` for the operational command. Install from accepted package
 sources, not a checkout with in-flight code changes: the command snapshots the
 selected sources, it does not automatically select an accepted Git commit. That
 non-editable installation then stays unchanged while later development moves on.
+
+### Prepare rclone
+
+The agent explicitly runs `hermes-mailcloud setup` after installing the Python
+package. No user-supplied executable or PATH editing is required. Default setup
+uses official HTTPS, pinned archive/executable SHA-256 and sizes, exact-member
+extraction and a private staged version check before atomic activation. It only
+prepares rclone: no account/cloud configuration, package-install hook, global
+PATH/registry/service change or implicit download from ordinary commands.
+
+The packaged pin is **rclone v1.75.2**, Windows/Linux **amd64 with 64-bit Python**.
+The artifact minimums checked by setup are Windows 10 / Server 2016+ or Linux
+kernel 3.2+; other OSes/architectures are rejected. Actual local qualification is
+Windows 11 x64/Linux with Python 3.12/3.13, not every upstream-supported platform.
+Windows managed storage also requires the supported local fixed NTFS/private
+path form, not redirected network/reparse storage. Do not weaken permissions to
+bypass a refusal. The downloaded rclone remains a separate external MIT tool;
+it is not included in the Python wheel/sdist. See [third-party notices](../THIRD_PARTY_NOTICES.md)
+and the [official downloads](https://rclone.org/downloads/).
+
+Managed storage is `%LOCALAPPDATA%/hermes-mailcloud/rclone` on Windows (falling
+back to `USERPROFILE`/`HOME` plus `AppData/Local` when needed), or
+`${XDG_DATA_HOME:-$HOME/.local/share}/hermes-mailcloud/rclone` on Linux. It is
+separate from site-packages and cloud configuration. Protected staging, a stable
+setup lock and a verified activation record support repeated/concurrent setup;
+old release files are retained on error, without a rollback promise after an
+already-completed atomic replacement.
+
+For offline preparation, the agent can reuse the exact official archive matching
+packaged `hermes_mailcloud/rclone/releases.json`; arbitrary URLs/versions are not
+accepted. The ZIP is verified just as in the default HTTPS path:
+
+```console
+hermes-mailcloud --json setup --archive /absolute/path/to/pinned-official.zip
+hermes-mailcloud --json setup --dry-run
+```
+
+Dry-run does not download, launch a process or create managed directories.
+A valid external rclone is kept; otherwise an already verified managed generation
+is reused, not automatically updated when the Python package pin changes. Explicit
+`HMC_RCLONE_PATH` or profile `rclone_path` always wins, including an invalid path:
+correct that override separately, never silently replace it. Omit `rclone_path`
+for automatic external-PATH → managed lookup. Read-only doctor may suggest setup
+but never performs it. After setup alone, `rclone_installed` can be true while
+`remote_configured`/`cloud_access` remain false; this is not a setup failure.
 
 Python `>=3.12` is required. On native Windows, dependency resolution includes
 `pywin32>=312` via the `sys_platform == 'win32'` marker; the repository lockfile
@@ -61,11 +91,12 @@ See [third-party notices](../THIRD_PARTY_NOTICES.md#pywin32-notices).
 Local clean-wheel, real console-launcher and fake-backed file/public/batch
 checks cover Windows/Linux with Python 3.12 and 3.13, including the native journal
 and subprocess boundary. The Windows checks used elevated processes: genuine
-ordinary-user Windows qualification, trusted real-rclone offline checks and a
-remote GitHub Actions matrix remain unqualified. See the
+ordinary-user Windows qualification and a remote GitHub Actions matrix remain
+unqualified. Official default HTTPS setup, managed discovery and real local-file
+rclone use are checked separately from fake-backed scenarios. See the
 [portable package smoke](../README.md#package-smoke-test) for isolated wheel
 validation; it is distinct from installing the operational command above and
-does not prove real rclone/Mail.ru access or complete release readiness.
+does not prove Mail.ru access or complete release readiness.
 
 On POSIX, create a new user configuration (edit an existing file instead of
 overwriting it):
@@ -75,7 +106,7 @@ mkdir -p ~/.config/hermes-mailcloud
 cat > ~/.config/hermes-mailcloud/config.toml <<'EOF'
 [profiles.default]
 remote = "mailru:"
-rclone_path = "rclone"
+# Omit rclone_path to use external-PATH -> managed lookup.
 links_journal = "~/.local/share/hermes-mailcloud/links.jsonl"
 EOF
 chmod 600 ~/.config/hermes-mailcloud/config.toml
@@ -132,15 +163,30 @@ rollback guarantee. A journal error after `publish`/`link` may follow an already
 completed remote effect: there is no automatic write retry or cloud rollback.
 See [failure after a public operation](08-configuration-and-secrets.md#failure-after-a-public-operation).
 
-Check the installed command and read-only cloud access after configuring your
-own rclone remote:
+## 3. Configure Mail.ru separately
+
+Dependency setup does not create or change an rclone remote. After the preceding
+installation, the agent starts upstream interactive `rclone config` using the
+already selected external/managed executable, not a second global installation.
+Installation automation can resolve it with `hermes_mailcloud.config.resolve_config().rclone_path`
+in the **same installed Python environment**, never an in-flight checkout. Here
+`rclone config` names the upstream command, not a promise that a managed binary
+is on PATH; the user is not asked to locate it. Enter credentials directly into
+rclone's interactive configuration, not command arguments or chat.
+
+Create a Mail.ru Cloud remote named `mailru`. Keep login/app password only in
+its private rclone configuration, not in the repository or HMC profile. After
+that separate account step, verify readiness through the ordinary installed CLI:
 
 ```bash
 hermes-mailcloud version
 hermes-mailcloud --json doctor
 ```
 
-The doctor result should report `config_loaded`, `rclone_installed`, `remote_configured`, `remote_listed`, and `cloud_access` as `true`.
+Only after successful account configuration/access should `config_loaded`,
+`rclone_installed`, `remote_configured`, `remote_listed` and `cloud_access` all be
+true. Read-only doctor does not configure or mutate the cloud. See
+[configuration and secrets](08-configuration-and-secrets.md).
 
 ## 4. Basic use
 
@@ -179,6 +225,7 @@ After an accepted update reaches the main branch, refresh the stable command exp
 ```bash
 git pull --ff-only
 uv tool install --force --python 3.12 .
+hermes-mailcloud --json setup
 hermes-mailcloud version
 hermes-mailcloud --json doctor
 ```

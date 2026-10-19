@@ -317,6 +317,19 @@ Linux APIs. Timeout/неподтверждённый cleanup — failure, не G
 даны в [package smoke test](../README.md#package-smoke-test).
 Локальные runtime результаты не являются remote CI run или ordinary-Windows proof.
 
+Installer `setup` имеет отдельные deterministic offline controls для HTTPS policy,
+pins/hash-before-execution, unsafe/corrupt archive, activation/cleanup/concurrency,
+explicit precedence и network-free dry-run/read-only commands. Обычный pytest/CI
+не скачивает rclone. Отдельная real installed проверка использует официальный
+pinned rclone: default HTTPS setup на каждой ОС; `--archive`/другие Python cells
+используют verified official archive cache с теми же pins без повторной загрузки.
+Setup не обещает сохранение скачанного ZIP; архивный GREEN не заменяет default
+HTTPS proof. Managed discovery и local-file round-trip выполняются в собственном
+изолированном alias root. Это не fake-backed proof, но и не доступ
+к Mail.ru. Windows/Linux Python 3.12/3.13 проверены локально; elevated Windows не
+становится ordinary-logon qualification. Package содержит только pins/resource,
+не executable; реальная зависимость устанавливается явным шагом агента.
+
 Не запускать по умолчанию:
 
 ```text

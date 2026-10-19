@@ -4,7 +4,8 @@ Agent CLI for Mail.ru Cloud — rclone-backed, JSON-first, safety-aware.
 
 > Status: **v0.1 pre-release package** — `version`, `doctor`, `ls`, `stat`,
 > `mkdir`, `upload`, `download`, `mv`, `cp`, guarded `rm`, `publish`, `link`,
-> and `batch` are implemented through the typed rclone boundary. `publish`/`link`
+> and `batch` are implemented through the typed rclone boundary. Explicit `setup`
+> prepares the external rclone dependency for the current user. `publish`/`link`
 > require an owner-private local link journal and return only a public-link
 > fingerprint. `batch` validates a strict versioned JSON plan, supports zero-call
 > dry-runs, and reports ordered partial failures. `doctor` defaults to read-only
@@ -21,9 +22,10 @@ The tag is a historical snapshot; current sources include POSIX and native
 Windows journal and subprocess backends. Local clean-wheel, real-launcher and
 fake-backed runtime checks cover Windows/Linux with Python 3.12 and 3.13. The
 Windows checks used elevated processes, not ordinary-user qualification.
-Genuine non-admin Windows, trusted real-rclone offline checks and a remote
-GitHub Actions matrix remain unqualified; fake-backed checks do not prove real
-rclone or Mail.ru operation. See the
+Explicit installed setup, managed discovery and real rclone local-file operations
+are checked on those targets; default official HTTPS acquisition is checked on
+both OSes. Genuine non-admin Windows and a remote GitHub Actions matrix remain
+unqualified. Local/fake-backed checks do not prove Mail.ru access. See the
 [Windows boundaries and limits](docs/11-local-installation.md#windows-configuration).
 
 ## Quick start (development)
@@ -42,12 +44,23 @@ Install a stable, non-editable command from an accepted repository revision:
 
 ```bash
 uv tool install --python 3.12 .
+hermes-mailcloud --json setup
 hermes-mailcloud version
 hermes-mailcloud --json doctor
 ```
 
-Mail.ru credentials remain in the user's private `rclone` configuration. The
-complete student setup, local config, skill installation, and update procedure
+The agent runs `setup` explicitly after installing the Python package; users do
+not need to find an executable or edit `PATH`. When needed, it downloads pinned
+official rclone for Windows/Linux amd64 over HTTPS, verifies archive/executable hashes,
+and activates a private per-user copy outside site-packages. No binary is bundled
+in the wheel, no global installation or cloud configuration is performed, and
+help/version/doctor/ordinary commands never download implicitly. Existing explicit
+executable overrides and a working external rclone remain authoritative.
+
+For the pinned version, offline `--archive`, storage and qualification limits,
+see [Prepare rclone](docs/11-local-installation.md#prepare-rclone). Mail.ru
+credentials remain in the user's private rclone configuration. The complete
+student setup, local config, skill installation, and update procedure
 are in [`docs/11-local-installation.md`](docs/11-local-installation.md).
 
 ## Package smoke test

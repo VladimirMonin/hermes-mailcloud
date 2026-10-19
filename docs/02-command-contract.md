@@ -16,6 +16,8 @@
 > link expiration/passwords, and full link audit are post-v0.1. `auth` is not
 > a command: read-only `doctor` reports credential readiness without exposing
 > credentials. This freeze takes precedence over older draft sections below.
+> Explicit dependency `setup` is additionally implemented; it does not configure
+> cloud access or add a cloud operation to this frozen surface.
 > The source tree implements `version`, `doctor`, `ls`, `stat`, `mkdir`, `upload`,
 > `download`, `mv`, `cp`, `rm`, `publish`, `link`, and `batch`. `doctor` defaults
 > to read-only readiness checks; its explicitly confirmed live mode uses only
@@ -80,6 +82,52 @@ hermes-mailcloud publish ./report.pdf /Hermes/public/report.pdf --json --yes
 `hermes-mailcloud version` prints the installed package version without loading
 configuration or calling rclone. With `--json`, it returns a normal result
 envelope whose `result.version` contains the same value.
+
+---
+
+## 3.2. Команда `setup`
+
+После установки Python-пакета агент явно запускает `hermes-mailcloud --json setup`.
+Команда подготавливает только rclone для текущего пользователя, без cloud/account
+configuration, изменения PATH или бинарника внутри wheel. При отсутствии
+explicit override и внешнего rclone она получает закреплённый official HTTPS
+архив, проверяет SHA-256/размер архива и executable до исполнения, затем активирует
+управляемую копию. Уже рабочая external/managed копия сохраняется без auto-update.
+Ошибочный explicit `HMC_RCLONE_PATH`/profile `rclone_path` не обходится fallback.
+
+```console
+hermes-mailcloud --json setup
+hermes-mailcloud --json setup --archive /absolute/path/to/pinned-official.zip
+hermes-mailcloud --json setup --dry-run
+```
+
+`--archive` — локальный официальный архив для текущей платформы с теми же
+packaged pins, не произвольный URL. `--dry-run` не скачивает, не запускает rclone
+и не создаёт managed directories. Остальные команды не выполняют скрытый setup.
+Поддерживаемые targets/storage и offline procedure:
+[Prepare rclone](11-local-installation.md#prepare-rclone).
+
+Успешный результат ограничен `setupResult` в нормативной envelope schema:
+
+```json
+{
+  "ok": true,
+  "operation": "setup",
+  "result": {
+    "dependency": "rclone",
+    "status": "installed",
+    "source": "managed",
+    "version": "v1.75.2",
+    "cloud_configured": false
+  }
+}
+```
+
+`status` также бывает `already_available` или `dry_run`; `source` — `managed`
+либо `external`. Для dry-run explicit executable `version` может быть `null`,
+поскольку процесс не запускается. Ошибки используют прежние kinds/exit codes,
+включая `rclone_not_found` для отсутствующего explicit executable. Read-only
+`doctor` только сообщает readiness/следующий шаг, но не устанавливает зависимость.
 
 ---
 

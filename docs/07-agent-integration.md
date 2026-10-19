@@ -7,7 +7,8 @@
 > `stat`, `mkdir`, `upload`, `download`, `mv`, `cp`, `rm`, `publish`, `link`,
 > and `batch`. `unlink` appears only after live rclone unlink plus URL
 > invalidation proof; `sync`, `resolve`, private API, expire/password links and
-> full link audit are post-v0.1. Never put a returned public URL, raw provider
+> full link audit are post-v0.1. Explicit dependency `setup` is an additional
+> installation step, not a cloud/auth operation. Never put a returned public URL, raw provider
 > diagnostics or a probe artifact in Git, Kanban or chat.
 
 > [!important]
@@ -47,10 +48,23 @@ assume an automatic write retry.
 dry-run → проверить JSON plan → выполнить с обязательным для команды подтверждением → прочитать result/error
 ```
 
+### Подготовка после установки пакета
+
+Агент устанавливает accepted non-editable Python package, затем явно вызывает
+`hermes-mailcloud --json setup` и read-only `hermes-mailcloud --json doctor`.
+Setup готовит pinned official user-scoped rclone без cloud configuration и без
+ручного executable/PATH шага пользователя. Для offline archive допускается только
+`setup --archive` с packaged pins; dry-run не скачивает и не запускает процесс.
+Help/version/doctor/обычные file commands никогда не загружают зависимость скрыто.
+Существующая рабочая external/managed копия не обновляется автоматически;
+invalid explicit path требует отдельного исправления, не silent fallback.
+Подробности: [Prepare rclone](11-local-installation.md#prepare-rclone).
+
 ## 2. Что агент может делать ✅
 
 | Задача | Команда |
 |---|---|
+| подготовить зависимость при установке | `setup --json` (не cloud setup) |
 | проверить окружение | `doctor --json` |
 | посмотреть папку | `ls /path --json` |
 | загрузить приватный файл | `upload local remote --json` |
@@ -132,7 +146,7 @@ dry-run → проверить JSON plan → выполнить с обязат�
 | `1` | неизвестная ошибка | остановить задачу |
 | `2` | ошибка аргументов | исправить вызов |
 | `3` | ошибка конфига | вызвать `doctor` |
-| `4` | rclone не найден | сообщить оператору |
+| `4` | rclone не найден | при разрешённой подготовке вызвать `setup`; invalid explicit override исправить отдельно |
 | `5` | remote не настроен | сообщить оператору |
 | `6` | auth/access denied | сообщить оператору |
 | `7` | объект не найден | проверить путь |
