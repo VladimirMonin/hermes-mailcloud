@@ -667,25 +667,66 @@ def test_suspended_create_assign_then_resume_before_any_child_effect(
             handle.Close()
 
 
+@pytest.mark.parametrize("inherit_unrelated", [False, True])
 def test_explicit_handle_list_does_not_inherit_an_unrelated_inheritable_event(
-    tmp_path: Path,
+    tmp_path: Path, monkeypatch, inherit_unrelated: bool
 ) -> None:
-    # CreateEvent defaults non-inheritable; explicitly make only this test event inheritable.
     event = win32event.CreateEvent(None, True, False, None)
     native._set_inheritable(int(event), True)
+    original_list = native._inherited_handle_list
+    requested: list[tuple[int, ...]] = []
+
+    @contextmanager
+    def handle_list(handles):
+        assert len(handles) == 3 and int(event) not in handles
+        requested.append(tuple(handles))
+        # Positive control: genuinely leak this exact parent object, not a fake result.
+        selected = (*handles, int(event)) if inherit_unrelated else handles
+        with original_list(selected) as attributes:
+            yield attributes
+
+    monkeypatch.setattr(native, "_inherited_handle_list", handle_list)
     try:
+        assert win32event.WaitForSingleObject(event, 0) == win32event.WAIT_TIMEOUT
+        assert _handle_flags(int(event)) & native._HANDLE_FLAG_INHERIT
         code = """
-            import json, sys, win32event
+            import json, sys, pywintypes, win32event
             try:
                 win32event.SetEvent(int(sys.argv[1]))
-                print(json.dumps({"inherited": True}))
-            except Exception:
-                print(json.dumps({"inherited": False}))
+            except pywintypes.error as exc:
+                result = {"set_event_succeeded": False, "winerror": exc.winerror}
+            else:
+                result = {"set_event_succeeded": True, "winerror": None}
+            print(json.dumps(result))
         """
         result = _run(tmp_path, code, str(int(event)))
-        assert result.returncode == 0
-        assert json.loads(result.stdout) == {"inherited": False}
-        assert win32event.WaitForSingleObject(event, 0) == win32event.WAIT_TIMEOUT
+        parent_state = win32event.WaitForSingleObject(event, 0)
+
+        def assert_parent_isolated() -> None:
+            assert parent_state == win32event.WAIT_TIMEOUT, "unrelated parent event was signaled"
+
+        if inherit_unrelated:
+            assert parent_state == win32event.WAIT_OBJECT_0
+            with pytest.raises(AssertionError, match="unrelated parent event was signaled"):
+                assert_parent_isolated()
+        else:
+            assert_parent_isolated()
+        assert result.returncode == 0, result.stderr
+        assert not result.stdout_truncated and not result.stderr_truncated
+        assert result.stderr == ""
+        payload = json.loads(result.stdout)
+        assert set(payload) == {"set_event_succeeded", "winerror"}
+        assert type(payload["set_event_succeeded"]) is bool
+        if payload["set_event_succeeded"]:
+            assert payload["winerror"] is None
+        else:
+            assert type(payload["winerror"]) is int and payload["winerror"] > 0
+        if inherit_unrelated:
+            assert payload == {"set_event_succeeded": True, "winerror": None}
+        # A successful numeric SetEvent may refer to a different child-local event.
+        # It is accepted only with the actual parent object still nonsignaled.
+        assert len(requested) == 1
+        assert _handle_flags(int(event)) & native._HANDLE_FLAG_INHERIT
     finally:
         event.Close()
 
