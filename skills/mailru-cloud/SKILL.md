@@ -13,7 +13,7 @@ version: 1.0.0
 
 ## Available interface
 
-- Prefer the non-editable operational `uv tool` command (package 0.1.0a1 is alpha, not stable): `hermes-mailcloud ... --json`.
+- Current stable package: **0.1.0**, GitHub Release only, not PyPI. Prefer the isolated persistent `uv tool` command for regular agent use: `hermes-mailcloud ... --json`. uv tool is built into uv and convenient, not mandatory; no checkout is needed.
 - During development, use `uv run hermes-mailcloud ...` from the repository checkout.
 - Source of truth: repository `README.md` and `docs/README.md`.
 - Commands: explicit dependency `setup`, read-only `doctor`, `ls`, `stat`, `mkdir`, `upload`, `download`, `mv`, `cp`, `rm`, `publish`, `link`, and `batch`.
@@ -22,7 +22,7 @@ version: 1.0.0
 ## Workflow
 
 1. After package installation, explicitly run `hermes-mailcloud --json setup`, then read-only `doctor`. Setup prepares pinned official Windows/Linux amd64 rclone, not a cloud account; no manual executable/PATH step. Later, if readiness is uncertain, use `doctor`. An invalid explicit `HMC_RCLONE_PATH`/profile `rclone_path` must be corrected separately, never silently bypassed.
-2. Read `ok`, `result`/`error`, and the process exit code; do not parse pretty output.
+2. For a saved connection, select its application `--config` and matching explicit `--profile`, and pass the separate backend `RCLONE_CONFIG` in the invoking process environment. A default refusal does not prove credentials absent; never open/copy secret configuration bodies or request credentials in chat. Read `ok`, `result`/`error`, and the process exit code; do not parse pretty output.
 3. For writes, use `--dry-run` first when supported. Never automatically retry an ambiguous write.
 4. Add `--yes` only for confirmation-gated operations such as `rm`, `publish`, write-batch, and live doctor.
 5. Keep test mutations in the authorized unique `/TEST/<run-id>/`. A path there does not satisfy the `/Hermes/public` publication policy; that policy does not itself authorize a different test root. If both constraints cannot be met, stop and request an explicit owner decision; do not broaden either scope.
@@ -36,13 +36,14 @@ Use a suitable timeout such as `--timeout 600`. Compare size and SHA-256 before 
 
 ## Non-editable install and refresh
 
-From a clean accepted repository revision:
+Install uv using its official installation guide; no separate uv-tool package.
+Use the pinned GitHub wheel (Python >=3.12, qualification targets 3.12/3.13):
 
-```bash
-uv tool install --force --python 3.12 .
+```console
+uv tool install --python 3.12 https://github.com/VladimirMonin/hermes-mailcloud/releases/download/v0.1.0/hermes_mailcloud-0.1.0-py3-none-any.whl
 hermes-mailcloud --json setup
 hermes-mailcloud version
 hermes-mailcloud --json doctor
 ```
 
-The installed command must remain non-editable so branch changes and uncommitted development cannot alter the operational CLI. Help/version/doctor/file commands never download implicitly. Setup keeps a valid external or existing managed copy; package refresh is not an automatic rclone update. Offline `setup --archive` requires the exact packaged official pin. Storage, supported targets, separate interactive cloud configuration and limits are in `docs/11-local-installation.md`; binaries are not bundled in the Python package.
+To intentionally replace an older GitHub-wheel installation, repeat that exact URL with `uv tool install --force --python 3.12`; do not assume a registry-name auto-upgrade. Verify `version` reports 0.1.0. If command discovery fails, use `uv tool dir --bin` and the exact launcher path; shell setup and alternatives are in the install guide. The installed command must remain non-editable so branch changes and uncommitted development cannot alter the operational CLI. Help/version/doctor/file commands never download implicitly. Setup keeps a valid external or existing managed copy; package refresh is not an automatic rclone update. Offline `setup --archive` requires the exact packaged official pin. Storage, supported targets, separate interactive cloud configuration and limits are in `docs/11-local-installation.md`; binaries are not bundled in the Python package.

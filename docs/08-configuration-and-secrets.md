@@ -34,8 +34,9 @@ Mail.ru app password
 
 ## 2. Rclone remote 🔐
 
-Сначала агент устанавливает Python-пакет и явно выполняет `hermes-mailcloud setup`;
-это готовит зависимость, но не создаёт remote. Облачная настройка — отдельный
+После установки Python-пакета агент явно выполняет `hermes-mailcloud --json setup`;
+это готовит зависимость, но не создаёт remote. Готовое подключение сначала выбирают
+явно, а не настраивают credentials заново. Облачная настройка — отдельный
 интерактивный `config` у уже выбранного rclone (external или managed), с вводом
 секретов непосредственно в rclone, не в CLI argv/чат. Агент не требует искать
 executable или менять PATH; порядок установки и выбора бинарника описан в
@@ -62,6 +63,30 @@ hermes-mailcloud --remote mailru: --json doctor
 
 > [!note]
 > Для Mail.ru backend rclone нужен пароль внешнего приложения, а не обычный пароль аккаунта.
+
+### Выбор уже существующего подключения
+
+`--config` и `RCLONE_CONFIG` выбирают **два разных файла**: первый — application
+TOML с профилями HMC, второй — отдельное backend-хранилище rclone. Переменная
+`RCLONE_CONFIG` передаётся в среде вызывающего процесса и сохраняется в узкой среде
+backend. Вызов CLI должен также выбрать соответствующий существующий `--profile`;
+без него выбирается default, который может не описывать нужное подключение.
+
+Fictitious paths, no secrets (профиль `work` должен уже существовать в HMC-файле):
+
+```powershell
+$env:RCLONE_CONFIG = 'C:\CloudSettings\rclone.conf'
+hermes-mailcloud --config 'C:\CloudSettings\hmc.toml' --profile work --json doctor
+```
+
+```sh
+RCLONE_CONFIG='/safe/cloud-settings/rclone.conf' hermes-mailcloud --config /safe/cloud-settings/hmc.toml --profile work --json doctor
+```
+
+Отказ default-подключения не доказывает отсутствие сохранённых credentials.
+Агент использует известные locator-пути, не открывает/копирует/печатает содержимое
+конфигов и не передаёт пароли в argv. Эти примеры не меняют постоянные настройки.
+Подробнее: [reuse an existing connection](11-local-installation.md#reuse-an-existing-connection).
 
 ## 3. Конфиг hermes-mailcloud 📄
 
@@ -167,7 +192,8 @@ Read-only lookup ничего не скачивает и не создаёт. Я
 |---|---|
 | `HMC_PROFILE` | профиль по умолчанию |
 | `HMC_REMOTE` | rclone remote |
-| `HMC_CONFIG` | путь к config.toml |
+| `HMC_CONFIG` | путь к application config.toml; CLI `--config` имеет приоритет |
+| `RCLONE_CONFIG` | отдельный backend config rclone; задаётся в вызывающей process environment |
 | `HMC_LINKS_JOURNAL` | путь к журналу ссылок |
 | `HMC_LIVE` | разрешить live-тесты |
 | `HMC_TEST_ROOT` | fresh `/TEST/hermes-mailcloud-<unique-run-id>` root for an explicit live run |

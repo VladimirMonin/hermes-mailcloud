@@ -2,7 +2,7 @@
 
 Agent CLI for Mail.ru Cloud — rclone-backed, JSON-first, safety-aware.
 
-> Status: **0.1.0a1 alpha / prerelease package** — `version`, `doctor`, `ls`, `stat`,
+> Status: **0.1.0 stable release** — `version`, `doctor`, `ls`, `stat`,
 > `mkdir`, `upload`, `download`, `mv`, `cp`, guarded `rm`, `publish`, `link`,
 > and `batch` are implemented through the typed rclone boundary. Explicit `setup`
 > prepares the external rclone dependency for the current user. `publish`/`link`
@@ -16,12 +16,13 @@ Agent CLI for Mail.ru Cloud — rclone-backed, JSON-first, safety-aware.
 
 ## Version and platform support
 
-The current package is **0.1.0a1**, an alpha, not a stable release. GitHub
-prerelease artifacts use the immutable `v0.1.0a1` tag; see the
-[release notes](docs/10-v0.1-release-notes.md) and
-[artifact installation](docs/11-local-installation.md#install-from-a-release-wheel).
-The `v0.1.0a0` tag remains a historical alpha source snapshot. A tag alone is not
-a GitHub Release, a PyPI upload, or a claim of production readiness.
+The current stable package is **0.1.0**, published on GitHub under immutable
+`v0.1.0`, **not on PyPI**. This promotes the accepted 0.1 functionality and updates
+version/installation documentation; it does not add runtime features or create
+new compatibility evidence. See the [release notes](docs/10-v0.1-release-notes.md)
+and [artifact installation](docs/11-local-installation.md#install-from-a-release-wheel).
+The `v0.1.0a0` source snapshot and `v0.1.0a1` prerelease remain immutable history.
+A stable release label is not a claim of universal platform qualification.
 Current sources include POSIX and native
 Windows journal and subprocess backends. Local full offline, clean-wheel, real-launcher and
 fake-backed runtime checks cover Windows/Linux with Python 3.12 and 3.13. The
@@ -45,18 +46,28 @@ uv run ruff check .
 
 ## Install for daily use
 
-Install a non-editable operational command from an accepted alpha repository
-revision (non-editable does not mean stable-release quality):
+Install [uv](https://docs.astral.sh/uv/getting-started/installation/) first;
+`uv tool` is built into uv, not a separate prerequisite. It is recommended for
+regular agent use: an isolated environment and persistent command outside a
+checkout, without maintaining a source repository. It is convenient, not mandatory
+and not a backend/cloud requirement. Python **>=3.12** is declared; 3.12/3.13 are
+the qualification targets. Use the pinned GitHub wheel, not a registry-name install:
 
-```bash
-uv tool install --python 3.12 .
+```console
+uv tool install --python 3.12 https://github.com/VladimirMonin/hermes-mailcloud/releases/download/v0.1.0/hermes_mailcloud-0.1.0-py3-none-any.whl
 hermes-mailcloud --json setup
 hermes-mailcloud version
 hermes-mailcloud --json doctor
 ```
 
+For an intentional replacement of an older GitHub-wheel installation, repeat
+that exact install URL with `uv tool install --force --python 3.12`; do not assume
+a PyPI auto-upgrade. Check `hermes-mailcloud version` afterwards. If the command
+is not found, locate its directory with `uv tool dir --bin` or invoke its launcher
+by absolute path; see the installation guide for alternatives and shell setup.
+
 The agent runs `setup` explicitly after installing the Python package; users do
-not need to find an executable or edit `PATH`. When needed, it downloads pinned
+not need to find a rclone executable or edit global `PATH`. When needed, it downloads pinned
 official rclone for Windows/Linux amd64 over HTTPS, verifies archive/executable hashes,
 and activates a private per-user copy outside site-packages. No binary is bundled
 in the wheel, no global installation or cloud configuration is performed, and
@@ -67,7 +78,11 @@ For the pinned version, offline `--archive`, storage and qualification limits,
 see [Prepare rclone](docs/11-local-installation.md#prepare-rclone). Mail.ru
 credentials remain in the user's private rclone configuration. The complete
 student setup, local config, skill installation, and update procedure
-are in [`docs/11-local-installation.md`](docs/11-local-installation.md).
+are in [`docs/11-local-installation.md`](docs/11-local-installation.md). An existing
+connection needs the matching application `--config`/`--profile` and a separate
+backend `RCLONE_CONFIG` in the invoking process environment; a default-connection
+refusal does not prove credentials are absent. See
+[reuse an existing connection](docs/11-local-installation.md#reuse-an-existing-connection).
 
 ## Package smoke test
 

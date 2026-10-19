@@ -1,63 +1,116 @@
 # Local installation and student setup
 
-This guide installs a non-editable operational `hermes-mailcloud` command and an optional Hermes skill. Package **0.1.0a1 is an alpha**, not a stable release. It does not contain Mail.ru credentials; every user configures their own account through `rclone`.
+This guide installs the stable **0.1.0** command and an optional Hermes skill.
+The package is distributed on GitHub, **not PyPI**. Credentials remain in the
+user's existing rclone configuration or are configured separately; installation
+never requires reading or copying their contents.
 
 ## 1. Prerequisites
 
-- Git access to this repository.
-- [`uv`](https://docs.astral.sh/uv/) in `PATH`.
-- Official HTTPS access for explicit dependency preparation, or the matching
-  pinned official archive for offline setup. No preinstalled rclone/PATH step.
-- A Mail.ru external-application password only for the separate cloud-account
-  configuration, not package installation or dependency setup.
+- Python **>=3.12**; Python 3.12/3.13 are the qualification targets.
+- For the recommended route, [uv](https://docs.astral.sh/uv/getting-started/installation/)
+  installed and available in your shell. `uv tool` is a built-in uv subcommand,
+  not another tool to install. Follow the official platform installer instructions,
+  open a fresh terminal when needed, then check `uv --version`.
+- Public HTTPS access for the GitHub wheel/Python dependencies and explicit rclone
+  preparation, or verified local artifacts/caches for the corresponding offline steps.
+- No repository clone or preinstalled rclone is needed for regular use. Git is
+  needed only for the optional source/development route below.
+- A Mail.ru external-application password is needed only when creating a new
+  cloud connection, not to install the CLI or reuse an already configured connection.
 
-Clone the repository and enter it:
+### Install uv itself
 
-```bash
-git clone https://github.com/VladimirMonin/hermes-mailcloud.git
-cd hermes-mailcloud
+If uv is not installed, the official standalone installers are available below;
+review the linked installation instructions and approve executing downloaded code
+before running them. This is an intentional user installation, not something the
+cloud CLI performs implicitly.
+
+Windows PowerShell:
+
+```powershell
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
 ```
 
-The repository is public and can be cloned without a repository invitation.
-Before contributing, configure a GitHub-provided noreply address for this
-repository and follow the [repository privacy guidance](../README.md#repository-privacy).
+POSIX shell:
+
+```sh
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+The PowerShell policy option applies to that installer process, not a permanent
+policy change. Follow the installer output for shell discovery, open a fresh
+terminal if needed, and run `uv --version`. Other official installation methods
+are equally usable; Administrator rights are not a package-install prerequisite.
 
 ## 2. Install the non-editable CLI and dependency
 
-From the repository root:
-
-```bash
-uv tool install --python 3.12 .
-hermes-mailcloud --json setup
-hermes-mailcloud --json doctor
-```
-
-Do not use `--editable` for the operational command. Install from accepted package
-sources, not a checkout with in-flight code changes: the command snapshots the
-selected sources, it does not automatically select an accepted Git commit. That
-non-editable installation then stays unchanged while later development moves on.
+For an agent's regular use, `uv tool` is recommended: it isolates dependencies and
+provides a persistent command usable outside the checkout. It is convenient,
+**not mandatory**, and neither uv nor uv tool is a backend/cloud requirement.
+`uv run` in the checkout is a separate source/development workflow.
 
 ### Install from a release wheel
 
-Alternatively, download `hermes_mailcloud-0.1.0a1-py3-none-any.whl` and
-`SHA256SUMS` from this repository's
-[GitHub prerelease](https://github.com/VladimirMonin/hermes-mailcloud/releases/tag/v0.1.0a1).
-Compare the local wheel's SHA-256 with its matching checksum entry (for example,
-PowerShell `Get-FileHash -Algorithm SHA256` or POSIX `sha256sum`). Then install
-the verified local wheel:
+Use the exact pinned GitHub asset URL (do not substitute a bare registry name):
 
 ```console
-uv tool install --python 3.12 ./hermes_mailcloud-0.1.0a1-py3-none-any.whl
-hermes-mailcloud --json setup
+uv tool install --python 3.12 https://github.com/VladimirMonin/hermes-mailcloud/releases/download/v0.1.0/hermes_mailcloud-0.1.0-py3-none-any.whl
 hermes-mailcloud version
+hermes-mailcloud --json setup
 hermes-mailcloud --json doctor
 ```
 
-Use `--force` for an intentional refresh of an existing installation. Runtime
-Python dependencies may be obtained from package indexes; the release wheel does
-not bundle them or rclone. The source distribution is also available. A checksum
-checks artifact integrity, not independent publisher authenticity. Cloud-account
-configuration remains the separate step below.
+`version` must report **0.1.0**. The source repository need not be kept locally.
+For an intentional replacement of an older GitHub-wheel installation:
+
+```console
+uv tool install --force --python 3.12 https://github.com/VladimirMonin/hermes-mailcloud/releases/download/v0.1.0/hermes_mailcloud-0.1.0-py3-none-any.whl
+hermes-mailcloud version
+hermes-mailcloud --json setup
+```
+
+This explicitly changes the package source/version; do not assume an upgrade by
+package name will discover a newer GitHub wheel on PyPI. Package replacement does
+not migrate credentials or automatically update an already valid rclone copy.
+
+Alternatively download the wheel and `SHA256SUMS` from the
+[stable GitHub Release](https://github.com/VladimirMonin/hermes-mailcloud/releases/tag/v0.1.0).
+Compare its local SHA-256 to the matching entry (PowerShell `Get-FileHash -Algorithm
+SHA256` or POSIX `sha256sum`), then use the local wheel path as the install argument.
+A checksum checks integrity, not independent publisher authenticity. Runtime
+Python dependencies may come from package indexes; they and rclone are not bundled.
+
+If `hermes-mailcloud` is not found, `uv tool dir --bin` locates the tool executable
+directory. In PowerShell the installed command can be invoked without a PATH edit:
+
+```powershell
+& (Join-Path (uv tool dir --bin) 'hermes-mailcloud.exe') version
+```
+
+Optional `uv tool update-shell` changes shell command discovery; apply it only as
+an intentional user-shell configuration action and open a new terminal afterwards.
+It is not a global rclone/PATH prerequisite. See the
+[official uv tools guide](https://docs.astral.sh/uv/guides/tools/).
+
+### Alternatives and source use
+
+A regular Python virtual environment is also supported; uv tool is not mandatory.
+For example, with Python 3.12 available via the Windows Python launcher:
+
+```powershell
+py -3.12 -m venv .hmc-env
+.\.hmc-env\Scripts\python.exe -m pip install https://github.com/VladimirMonin/hermes-mailcloud/releases/download/v0.1.0/hermes_mailcloud-0.1.0-py3-none-any.whl
+.\.hmc-env\Scripts\hermes-mailcloud.exe version
+.\.hmc-env\Scripts\hermes-mailcloud.exe --json setup
+```
+
+Use that environment's launcher thereafter. For source/development, clone the
+public repository, enter it and use `uv sync` / `uv run`; or install an accepted
+checkout non-editably with `uv tool install --python 3.12 .`. A checkout install
+snapshots the selected files; it does not automatically select an accepted commit.
+Do not use editable installations for the operational cloud command. Contributors
+also follow the [repository privacy guidance](../README.md#repository-privacy).
 
 ### Prepare rclone
 
@@ -204,6 +257,37 @@ See [failure after a public operation](08-configuration-and-secrets.md#failure-a
 
 ## 3. Configure Mail.ru separately
 
+### Reuse an existing connection
+
+There are **two different configuration files**. Application `--config` selects
+HMC profiles/policy, not backend authentication storage. `RCLONE_CONFIG` selects
+the separate rclone file and must be present in the **invoking process environment**.
+Keep the matching existing application profile explicitly selected with `--profile`;
+the CLI otherwise selects its default profile. A default `remote_not_configured`
+refusal does not establish that saved credentials are missing.
+
+Use known locators without opening/copying secret file bodies. These are fictitious
+non-secret paths; `work` must be a matching profile already in the chosen HMC file:
+
+```powershell
+$env:RCLONE_CONFIG = 'C:\CloudSettings\rclone.conf'
+hermes-mailcloud --config 'C:\CloudSettings\hmc.toml' --profile work --json doctor
+```
+
+POSIX shell equivalent, scoped to this invocation:
+
+```sh
+RCLONE_CONFIG='/safe/cloud-settings/rclone.conf' hermes-mailcloud --config /safe/cloud-settings/hmc.toml --profile work --json doctor
+```
+
+The PowerShell assignment affects that process/session, not persistent settings.
+Native agents should pass an argv array and that environment to the child process
+rather than embed shell quoting inside arguments. Never request passwords/config
+contents in chat or infer a need to re-enter credentials merely from a wrong default
+selection. Diagnose readiness with the selected read-only doctor first.
+
+### Create a new connection only when needed
+
 Dependency setup does not create or change an rclone remote. After the preceding
 installation, the agent starts upstream interactive `rclone config` using the
 already selected external/managed executable, not a second global installation.
@@ -226,6 +310,20 @@ Only after successful account configuration/access should `config_loaded`,
 `rclone_installed`, `remote_configured`, `remote_listed` and `cloud_access` all be
 true. Read-only doctor does not configure or mutate the cloud. See
 [configuration and secrets](08-configuration-and-secrets.md).
+
+### Verified installed boundary retained from alpha
+
+Earlier installed-alpha checks exercised a per-user uv tool from a Windows agent
+outside the checkout, with native argument arrays, JSON and exit-status checks and
+the selected official rclone. With the matching application config/profile and
+backend RCLONE_CONFIG, a bounded real Mail.ru check created its own directory,
+uploaded files, used list/stat, downloaded and compared complete bytes and SHA-256,
+renamed an object and confirmed removal of only its own objects. Initial default
+connection refusal and later correctly selected connection success are distinct
+observations. These are retained alpha checks, **not newly executed 0.1.0 cloud
+qualification**. Windows checks were **elevated**; ordinary-user runtime has **not**
+been qualified. This proves neither an Administrator requirement nor ordinary-user
+support; do not automatically elevate the whole agent.
 
 ## 4. Basic use
 
@@ -271,7 +369,9 @@ uv run pytest -q -m "not live"
 uv run hermes-mailcloud --help
 ```
 
-After an accepted update reaches the main branch, refresh the operational command explicitly:
+For checkout-based installations only, after an accepted update reaches the main
+branch, refresh from that checkout explicitly (GitHub-wheel users use the pinned
+replacement URL above):
 
 ```bash
 git pull --ff-only
