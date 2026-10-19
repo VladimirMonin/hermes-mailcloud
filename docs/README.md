@@ -16,8 +16,8 @@
 - [`07-agent-integration.md`](07-agent-integration.md) — agent invocation, JSON/error handling, safety rules, and labeled future proposals.
 - [`08-configuration-and-secrets.md`](08-configuration-and-secrets.md) — configuration and secret boundaries.
 - [`09-known-risks.md`](09-known-risks.md) — known risks.
-- [`10-v0.1-release-notes.md`](10-v0.1-release-notes.md) — supported surface, package and CI release gates.
-- [`11-local-installation.md`](11-local-installation.md) — stable `uv tool` installation, student setup, local configuration, and optional Hermes skill.
+- [`10-v0.1-release-notes.md`](10-v0.1-release-notes.md) — 0.1.0a1 alpha features, limits, package and CI release gates.
+- [`11-local-installation.md`](11-local-installation.md) — non-editable `uv tool` / release-wheel installation, student setup, local configuration, and optional Hermes skill.
 - [`../skills/mailru-cloud/SKILL.md`](../skills/mailru-cloud/SKILL.md) — compact agent router for Mail.ru Cloud requests.
 - [`adr/`](adr/) — architectural decision records.
 - [`agent-workflow.md`](agent-workflow.md) — durable agent-instruction maintenance.

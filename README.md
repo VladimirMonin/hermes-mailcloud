@@ -2,7 +2,7 @@
 
 Agent CLI for Mail.ru Cloud — rclone-backed, JSON-first, safety-aware.
 
-> Status: **v0.1 pre-release package** — `version`, `doctor`, `ls`, `stat`,
+> Status: **0.1.0a1 alpha / prerelease package** — `version`, `doctor`, `ls`, `stat`,
 > `mkdir`, `upload`, `download`, `mv`, `cp`, guarded `rm`, `publish`, `link`,
 > and `batch` are implemented through the typed rclone boundary. Explicit `setup`
 > prepares the external rclone dependency for the current user. `publish`/`link`
@@ -16,9 +16,13 @@ Agent CLI for Mail.ru Cloud — rclone-backed, JSON-first, safety-aware.
 
 ## Version and platform support
 
-The `v0.1.0a0` tag identifies the `0.1.0a0` alpha source snapshot. A source
-tag is not a GitHub Release, a PyPI upload, or a claim of production readiness.
-The tag is a historical snapshot; current sources include POSIX and native
+The current package is **0.1.0a1**, an alpha, not a stable release. GitHub
+prerelease artifacts use the immutable `v0.1.0a1` tag; see the
+[release notes](docs/10-v0.1-release-notes.md) and
+[artifact installation](docs/11-local-installation.md#install-from-a-release-wheel).
+The `v0.1.0a0` tag remains a historical alpha source snapshot. A tag alone is not
+a GitHub Release, a PyPI upload, or a claim of production readiness.
+Current sources include POSIX and native
 Windows journal and subprocess backends. Local full offline, clean-wheel, real-launcher and
 fake-backed runtime checks cover Windows/Linux with Python 3.12 and 3.13. The
 Windows checks used elevated processes, not ordinary-user qualification.
@@ -41,7 +45,8 @@ uv run ruff check .
 
 ## Install for daily use
 
-Install a stable, non-editable command from an accepted repository revision:
+Install a non-editable operational command from an accepted alpha repository
+revision (non-editable does not mean stable-release quality):
 
 ```bash
 uv tool install --python 3.12 .

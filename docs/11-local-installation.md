@@ -1,6 +1,6 @@
 # Local installation and student setup
 
-This guide installs a stable, non-editable `hermes-mailcloud` command and an optional Hermes skill. It does not contain Mail.ru credentials; every user configures their own account through `rclone`.
+This guide installs a non-editable operational `hermes-mailcloud` command and an optional Hermes skill. Package **0.1.0a1 is an alpha**, not a stable release. It does not contain Mail.ru credentials; every user configures their own account through `rclone`.
 
 ## 1. Prerequisites
 
@@ -22,7 +22,7 @@ The repository is public and can be cloned without a repository invitation.
 Before contributing, configure a GitHub-provided noreply address for this
 repository and follow the [repository privacy guidance](../README.md#repository-privacy).
 
-## 2. Install the stable CLI and dependency
+## 2. Install the non-editable CLI and dependency
 
 From the repository root:
 
@@ -36,6 +36,28 @@ Do not use `--editable` for the operational command. Install from accepted packa
 sources, not a checkout with in-flight code changes: the command snapshots the
 selected sources, it does not automatically select an accepted Git commit. That
 non-editable installation then stays unchanged while later development moves on.
+
+### Install from a release wheel
+
+Alternatively, download `hermes_mailcloud-0.1.0a1-py3-none-any.whl` and
+`SHA256SUMS` from this repository's
+[GitHub prerelease](https://github.com/VladimirMonin/hermes-mailcloud/releases/tag/v0.1.0a1).
+Compare the local wheel's SHA-256 with its matching checksum entry (for example,
+PowerShell `Get-FileHash -Algorithm SHA256` or POSIX `sha256sum`). Then install
+the verified local wheel:
+
+```console
+uv tool install --python 3.12 ./hermes_mailcloud-0.1.0a1-py3-none-any.whl
+hermes-mailcloud --json setup
+hermes-mailcloud version
+hermes-mailcloud --json doctor
+```
+
+Use `--force` for an intentional refresh of an existing installation. Runtime
+Python dependencies may be obtained from package indexes; the release wheel does
+not bundle them or rclone. The source distribution is also available. A checksum
+checks artifact integrity, not independent publisher authenticity. Cloud-account
+configuration remains the separate step below.
 
 ### Prepare rclone
 
@@ -239,7 +261,7 @@ uv run pytest -q -m "not live"
 uv run hermes-mailcloud --help
 ```
 
-After an accepted update reaches the main branch, refresh the stable command explicitly:
+After an accepted update reaches the main branch, refresh the operational command explicitly:
 
 ```bash
 git pull --ff-only

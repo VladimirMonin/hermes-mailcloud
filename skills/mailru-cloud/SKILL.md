@@ -13,7 +13,7 @@ version: 1.0.0
 
 ## Available interface
 
-- Prefer the stable non-editable `uv tool` command: `hermes-mailcloud ... --json`.
+- Prefer the non-editable operational `uv tool` command (package 0.1.0a1 is alpha, not stable): `hermes-mailcloud ... --json`.
 - During development, use `uv run hermes-mailcloud ...` from the repository checkout.
 - Source of truth: repository `README.md` and `docs/README.md`.
 - Commands: explicit dependency `setup`, read-only `doctor`, `ls`, `stat`, `mkdir`, `upload`, `download`, `mv`, `cp`, `rm`, `publish`, `link`, and `batch`.
@@ -34,7 +34,7 @@ version: 1.0.0
 
 Use a suitable timeout such as `--timeout 600`. Compare size and SHA-256 before upload and after round-trip download. Remove local test copies only after verification.
 
-## Stable install and refresh
+## Non-editable install and refresh
 
 From a clean accepted repository revision:
 
