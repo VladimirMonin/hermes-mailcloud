@@ -1,6 +1,6 @@
 # Hermes MailCloud documentation
 
-`README.md` at the repository root is the current project entry point. This directory contains the frozen v0.1 contract, safety guidance, testing strategy, release notes, historical architecture research, and accepted architectural decisions.
+`README.md` at the repository root is the current project entry point. This directory contains the supported 0.2.0 application interface, retained v0.1 CLI/schema contract, safety guidance, testing strategy, release notes, historical architecture research, and accepted architectural decisions.
 
 > Many command and module descriptions are plans for later waves. Confirm implemented behavior in `src/hermes_mailcloud/` and `tests/`.
 
@@ -8,12 +8,12 @@
 
 - [`foundation/project-philosophy.md`](foundation/project-philosophy.md) — purpose, engineering priorities and finite completion.
 - [`foundation/architecture-principles.md`](foundation/architecture-principles.md) — command-first direction, application ownership and compatibility boundaries.
-- [`plans/command-first-refactor.md`](plans/command-first-refactor.md) — proposed command-first roadmap, remaining migration and acceptance criteria; current implemented methods are documented in the architecture.
+- [`plans/command-first-refactor.md`](plans/command-first-refactor.md) — original proposed command-first design and acceptance criteria, not a progress report; current implemented methods are documented in the architecture.
 - [`foundation/observability-policy.md`](foundation/observability-policy.md) — useful diagnostics, privacy, actual channels and external-transfer limits.
 - [`../tools/project-foundation/README.md`](../tools/project-foundation/README.md) — complete imported methodology, skills and source attribution; not current product behavior.
 
 - [`00-research-summary.md`](00-research-summary.md) — research summary.
-- [`01-architecture.md`](01-architecture.md#current-in-process-application-interface) — current fifteen-method Application API, shared CLI ownership, setup/doctor/batch semantics and remaining private-glue cleanup; historical proposals are labeled separately.
+- [`01-architecture.md`](01-architecture.md#current-in-process-application-interface) — supported fifteen-method Application API, thin CLI adapter and setup/doctor/batch semantics; historical proposals are labeled separately.
 - [`02-command-contract.md`](02-command-contract.md) — frozen CLI contract, explicit dependency setup, and labeled future proposals.
 - [`03-development-plan.md`](03-development-plan.md) — implementation waves.
 - [`04-probe-plan.md`](04-probe-plan.md) — implemented safe probe harness and planned live capability evidence.
@@ -23,7 +23,8 @@
 - [`08-configuration-and-secrets.md`](08-configuration-and-secrets.md) — configuration and secret boundaries.
 - [`09-known-risks.md`](09-known-risks.md) — known risks.
 - [`10-v0.1-release-notes.md`](10-v0.1-release-notes.md) — stable 0.1.0 functionality, retained alpha verification boundaries, limits and release gates.
-- [`11-local-installation.md`](11-local-installation.md) — installing uv, recommended/nonmandatory uv tool, pinned stable wheel, saved-connection selection, refresh and optional skill.
+- [`11-local-installation.md`](11-local-installation.md) — installing uv, recommended/nonmandatory uv tool, pinned 0.2.0 wheel, saved-connection selection, refresh and optional skill.
+- [`12-v0.2-release-notes.md`](12-v0.2-release-notes.md) — command-first 0.2.0, compatibility changes, distribution and qualification limits.
 - [`../skills/mailru-cloud/SKILL.md`](../skills/mailru-cloud/SKILL.md) — compact agent router for Mail.ru Cloud requests.
 - [`adr/`](adr/) — architectural decision records.
 - [`agent-workflow.md`](agent-workflow.md) — durable agent-instruction maintenance.

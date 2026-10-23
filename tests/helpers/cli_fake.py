@@ -186,12 +186,8 @@ def _driver_code(script: Path) -> str:
             "import hermes_mailcloud.cli as cli",
             "from hermes_mailcloud.application import composition",
             "from hermes_mailcloud.rclone.runner import RcloneRunner as _RealRunner",
-            "class _FakeRunner(_RealRunner):",
-            "    def __init__(self, binary='rclone', **kwargs):",
-            f"        super().__init__((sys.executable, {str(script)!r}), **kwargs)",
-            "cli.RcloneRunner = _FakeRunner",  # Temporary seam for unmigrated commands.
             "def _create_backend(config, *, environment):",
-            "    return _FakeRunner(config.rclone_path, environment=environment)",
+            f"    return _RealRunner((sys.executable, {str(script)!r}), environment=environment)",
             "composition.create_backend = _create_backend",
             "sys.argv = ['hermes-mailcloud', *sys.argv[1:]]",
             "cli.app()",

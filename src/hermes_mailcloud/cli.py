@@ -1,9 +1,9 @@
-"""JSON-first CLI plumbing with explicit failure for unimplemented commands."""
+"""Thin JSON-first input/output adapter for the independent application API."""
 
 from __future__ import annotations
 
 import sys
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated, Any
@@ -13,12 +13,8 @@ import typer._click as click
 from typer.core import TyperGroup
 
 from .application import CallOptions, ConfigOverrides, MailCloudApplication
-from .batch import BatchCommands, parse_batch_file
-from .config import CliConfigOverrides, ResolvedConfig, resolve_config, resolve_profile_name
-from .core.errors import ErrorKind, ErrorPayload, MailCloudError
+from .core.errors import ErrorKind, ErrorPayload
 from .core.result import ResultEnvelope
-from .doctor import DoctorCommands
-from .rclone.runner import RcloneRunner
 
 
 class _GlobalOptionsGroup(TyperGroup):
@@ -348,182 +344,6 @@ def batch(
     _emit_application_result(
         MailCloudApplication().batch_file(plan_path, options=_call_options(options)), options
     )
-
-
-def _placeholder(context: typer.Context, operation: str) -> None:
-    options = _options(context)
-    error = ErrorPayload(
-        ErrorKind.BACKEND_UNSUPPORTED,
-        f"{operation} is not implemented in this build",
-    )
-    envelope = ResultEnvelope.failure(
-        operation,
-        error,
-        profile=options.profile,
-        remote=options.remote,
-        trace_id=options.trace_id,
-    )
-    _emit(envelope, options)
-    raise typer.Exit(error.exit_code)
-
-
-def _run_rclone_command(
-    context: typer.Context,
-    operation: str,
-    action: Callable[[ResolvedConfig, RcloneRunner], dict[str, object]],
-) -> None:
-    """Resolve non-secret configuration, execute one adapter, and emit one safe envelope."""
-    options = _options(context)
-    config: ResolvedConfig | None = None
-    try:
-        config = resolve_config(
-            CliConfigOverrides(
-                profile=options.profile,
-                remote=options.remote,
-                config_path=options.config_path,
-            )
-        )
-        result = action(config, RcloneRunner(config.rclone_path))
-    except MailCloudError as exc:
-        envelope = ResultEnvelope.failure(
-            operation,
-            exc.error,
-            profile=config.profile if config is not None else _legacy_profile(options),
-            remote=config.remote if config is not None else options.remote,
-            trace_id=options.trace_id,
-        )
-    else:
-        envelope = ResultEnvelope.success(
-            operation,
-            result,
-            profile=config.profile,
-            remote=config.remote,
-            trace_id=options.trace_id,
-        )
-    _emit(envelope, options)
-    if not envelope.ok:
-        raise typer.Exit(envelope.exit_code)
-
-
-def _run_doctor_command(context: typer.Context, *, live: bool) -> None:
-    """Emit one safe diagnostic report; live probes require both opt-in and confirmation."""
-    options = _options(context)
-    config: ResolvedConfig | None = None
-    try:
-        if live and not options.yes:
-            raise MailCloudError(
-                ErrorPayload(
-                    ErrorKind.CONFIRMATION_REQUIRED,
-                    "doctor --live requires --yes before it can create generated /TEST objects",
-                )
-            )
-        config = resolve_config(
-            CliConfigOverrides(
-                profile=options.profile,
-                remote=options.remote,
-                config_path=options.config_path,
-            )
-        )
-        commands = DoctorCommands(
-            RcloneRunner(config.rclone_path),
-            config,
-            timeout_seconds=_effective_timeout(options, config),
-            retries=_effective_read_retries(options, config),
-        )
-        report = commands.live() if live else commands.read_only()
-    except MailCloudError as exc:
-        envelope = ResultEnvelope.failure(
-            "doctor",
-            exc.error,
-            profile=config.profile if config is not None else _legacy_profile(options),
-            remote=config.remote if config is not None else options.remote,
-            trace_id=options.trace_id,
-        )
-    else:
-        envelope = ResultEnvelope.success(
-            "doctor",
-            report.result,
-            profile=config.profile,
-            remote=config.remote,
-            trace_id=options.trace_id,
-            warnings=report.warnings,
-        )
-    _emit(envelope, options)
-    if not envelope.ok:
-        raise typer.Exit(envelope.exit_code)
-
-
-def _run_batch_command(context: typer.Context, plan_path: Path) -> None:
-    """Load a static plan before configuration, then emit a completed or partial envelope."""
-    options = _options(context)
-    config: ResolvedConfig | None = None
-    try:
-        plan = parse_batch_file(plan_path)
-        config = resolve_config(
-            CliConfigOverrides(
-                profile=options.profile,
-                remote=options.remote,
-                config_path=options.config_path,
-            )
-        )
-        execution = BatchCommands(
-            RcloneRunner(config.rclone_path),
-            config,
-            timeout_seconds=_effective_timeout(options, config),
-            read_retries=_effective_read_retries(options, config),
-        ).run(
-            plan,
-            dry_run=options.dry_run,
-            yes=options.yes,
-            explicit_retries=options.retries,
-        )
-    except MailCloudError as exc:
-        envelope = ResultEnvelope.failure(
-            "batch",
-            exc.error,
-            profile=config.profile if config is not None else _legacy_profile(options),
-            remote=config.remote if config is not None else options.remote,
-            trace_id=options.trace_id,
-        )
-    else:
-        metadata = {
-            "profile": config.profile,
-            "remote": config.remote,
-            "trace_id": options.trace_id,
-        }
-        envelope = (
-            ResultEnvelope.batch_partial(execution.items, **metadata)
-            if execution.is_partial
-            else ResultEnvelope.success("batch", execution.result, **metadata)
-        )
-    _emit(envelope, options)
-    if not envelope.ok:
-        raise typer.Exit(envelope.exit_code)
-
-
-def _effective_timeout(options: CliRuntimeOptions, config: ResolvedConfig) -> int:
-    """Use the explicit CLI timeout when present, otherwise the validated profile value."""
-    if options.timeout_seconds is not None:
-        return options.timeout_seconds
-    return config.timeout_seconds
-
-
-def _effective_read_retries(options: CliRuntimeOptions, config: ResolvedConfig) -> int:
-    """Use an explicit retry budget for reads, otherwise the profile's safe-read budget."""
-    return options.retries if options.retries is not None else config.retries
-
-
-def _effective_write_retries(options: CliRuntimeOptions) -> int:
-    """Ignore profile read retries, but validate an explicit write retry request fail-closed."""
-    return options.retries if options.retries is not None else 0
-
-
-def _legacy_profile(options: CliRuntimeOptions) -> str | None:
-    """Preserve pre-config metadata without masking the original typed failure."""
-    try:
-        return resolve_profile_name(CliConfigOverrides(profile=options.profile))
-    except MailCloudError:
-        return None
 
 
 def _call_options(options: CliRuntimeOptions) -> CallOptions:

@@ -21,9 +21,11 @@ summary: "Прикладные операции независимо от CLI; �
 явный setup, doctor admission и оба batch inputs. Все CLI handlers переводят ввод
 и представляют его результат. `commands/`, `core/`, `batch/`, `doctor/`, installer,
 probes и runner сохраняют свои механизмы; отдельная оболочка их не переписывает.
-Private transitional helpers не являются запасным маршрутом. Точные сигнатуры и
-реальная поверхность — в [текущей архитектуре](../01-architecture.md#current-in-process-application-interface);
-[план рефакторинга](../plans/command-first-refactor.md) остаётся roadmap, не runtime evidence.
+CLI не содержит legacy execution route и не импортирует orchestration owners
+для самостоятельного исполнения. Точные сигнатуры и реальная поверхность — в
+[текущей архитектуре](../01-architecture.md#current-in-process-application-interface);
+[исходный план](../plans/command-first-refactor.md) сохраняет проектное обоснование,
+не заменяя runtime evidence.
 
 ## Один владелец ответственности
 

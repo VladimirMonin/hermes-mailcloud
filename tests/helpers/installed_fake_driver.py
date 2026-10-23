@@ -1,7 +1,7 @@
 """Standalone test-only argv driver; copy it outside the checkout before execution.
 
-Only the external executable argv is injected at application composition and,
-temporarily, the legacy CLI seam. All owners remain the installed wheel's bytes.
+Only the external executable argv is injected at application composition.
+All business owners remain the installed wheel's bytes.
 """
 
 from __future__ import annotations
@@ -46,7 +46,7 @@ _API_COMPONENTS = (
     "hermes_mailcloud.rclone.install",
     "hermes_mailcloud.probes.core",
 )
-_COMPONENTS = (*_API_COMPONENTS, "hermes_mailcloud.cli", "hermes_mailcloud.batch")
+_COMPONENTS = (*_API_COMPONENTS, "hermes_mailcloud.cli")
 
 
 def require(condition: bool, message: str) -> None:
@@ -138,27 +138,35 @@ def installed_provenance(control: dict, *, api_only: bool = False) -> dict:
         "application installer substitution",
     )
     journal = importlib.import_module("hermes_mailcloud.journal")
-    require(
-        importlib.import_module("hermes_mailcloud.commands.public").LinkJournal
-        is journal.LinkJournal,
-        "application journal substitution",
-    )
+    for module in ("hermes_mailcloud.commands.public", "hermes_mailcloud.batch"):
+        require(
+            importlib.import_module(module).LinkJournal is journal.LinkJournal,
+            "application journal substitution",
+        )
     if not api_only:
         cli = importlib.import_module("hermes_mailcloud.cli")
         require(
             cli.MailCloudApplication is service.MailCloudApplication, "CLI application substitution"
         )
-        for name, module in (("BatchCommands", "hermes_mailcloud.batch"),):
-            require(
-                getattr(cli, name) is getattr(importlib.import_module(module), name),
-                "legacy CLI component substitution",
-            )
-        journal = importlib.import_module("hermes_mailcloud.journal")
-        for module in ("hermes_mailcloud.commands.public", "hermes_mailcloud.batch"):
-            require(
-                importlib.import_module(module).LinkJournal is journal.LinkJournal,
-                "journal component substitution",
-            )
+        require(
+            not any(
+                hasattr(cli, name)
+                for name in (
+                    "RcloneRunner",
+                    "BatchCommands",
+                    "DoctorCommands",
+                    "ReadCommands",
+                    "MkdirCommand",
+                    "MoveCopyCommands",
+                    "RemoveCommand",
+                    "PublicCommands",
+                    "TransferCommands",
+                    "resolve_config",
+                    "prepare_rclone",
+                )
+            ),
+            "CLI retained a business-orchestration component",
+        )
     installed = {
         item.metadata["Name"].lower().replace("_", "-"): item.version
         for item in importlib.metadata.distributions()
@@ -278,8 +286,6 @@ def cli_run(control: dict, control_path: Path, arguments: list[str]) -> None:
     import hermes_mailcloud.cli as cli
     from hermes_mailcloud.application import composition
 
-    # S1 migration only: both seams create the actual installed runner.
-    cli.RcloneRunner = lambda binary="rclone", **kwargs: executable_runner(control_path, **kwargs)
     composition.create_backend = lambda config, *, environment: executable_runner(
         control_path, environment=environment
     )

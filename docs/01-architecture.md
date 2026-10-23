@@ -4,9 +4,9 @@
 
 ## Current in-process application interface
 
-Этот раздел описывает текущие исходники и собранные из них пакеты, а не прежний
-immutable release wheel `v0.1.0`. Одинаковое значение версии пакета не доказывает
-одинаковый состав артефакта. Канон Python-контракта —
+Этот раздел описывает поддерживаемый API пакета **0.2.0**, а не прежний
+immutable release wheel `v0.1.0`. Версия не заменяет проверку происхождения
+установленного артефакта. Канон Python-контракта —
 [`application/service.py`](../src/hermes_mailcloud/application/service.py) и
 [`application/contracts.py`](../src/hermes_mailcloud/application/contracts.py),
 не отдельная HTTP/JSON-схема или реестр команд.
@@ -27,12 +27,13 @@ CLI handlers ──────┴→ MailCloudApplication → config/compositio
 
 Стрелки обозначают вызов и передачу результата, не линейную цепочку imports.
 CLI `batch <file>` вызывает `batch_file(Path)`; Python consumer может передать уже
-декодированный документ в `batch(document)`. Внутренние services и сохранившиеся
-private transitional CLI helpers не являются вторым публичным SDK или fallback.
-Очистка migration glue/двойных test drivers и итоговая qualification поставки
-остаются в [предлагаемом плане](plans/command-first-refactor.md).
+декодированный документ в `batch(document)`. Внутренние services не являются
+вторым публичным SDK. Legacy execution helpers и двойной CLI injection отсутствуют;
+конфигурация/defaults/admission и исполнение не дублируются в адаптере.
+[Исходный план](plans/command-first-refactor.md) — проектное обоснование, не
+текущий reference API.
 
-Пример для Python-окружения с этим source-built пакетом и выбранным подключением:
+Пример для Python-окружения с пакетом 0.2.0 и выбранным подключением:
 
 ```python
 from hermes_mailcloud.application import CallOptions, MailCloudApplication

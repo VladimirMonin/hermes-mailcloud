@@ -1,6 +1,6 @@
 # Local installation and student setup
 
-This guide installs the stable **0.1.0** command and an optional Hermes skill.
+This guide installs the **0.2.0** command-first package and an optional Hermes skill.
 The package is distributed on GitHub, **not PyPI**. Credentials remain in the
 user's existing rclone configuration or are configured separately; installation
 never requires reading or copying their contents.
@@ -55,17 +55,17 @@ provides a persistent command usable outside the checkout. It is convenient,
 Use the exact pinned GitHub asset URL (do not substitute a bare registry name):
 
 ```console
-uv tool install --python 3.12 https://github.com/VladimirMonin/hermes-mailcloud/releases/download/v0.1.0/hermes_mailcloud-0.1.0-py3-none-any.whl
+uv tool install --python 3.12 https://github.com/VladimirMonin/hermes-mailcloud/releases/download/v0.2.0/hermes_mailcloud-0.2.0-py3-none-any.whl
 hermes-mailcloud version
 hermes-mailcloud --json setup
 hermes-mailcloud --json doctor
 ```
 
-`version` must report **0.1.0**. The source repository need not be kept locally.
+`version` must report **0.2.0**. The source repository need not be kept locally.
 For an intentional replacement of an older GitHub-wheel installation:
 
 ```console
-uv tool install --force --python 3.12 https://github.com/VladimirMonin/hermes-mailcloud/releases/download/v0.1.0/hermes_mailcloud-0.1.0-py3-none-any.whl
+uv tool install --force --python 3.12 https://github.com/VladimirMonin/hermes-mailcloud/releases/download/v0.2.0/hermes_mailcloud-0.2.0-py3-none-any.whl
 hermes-mailcloud version
 hermes-mailcloud --json setup
 ```
@@ -75,7 +75,7 @@ package name will discover a newer GitHub wheel on PyPI. Package replacement doe
 not migrate credentials or automatically update an already valid rclone copy.
 
 Alternatively download the wheel and `SHA256SUMS` from the
-[stable GitHub Release](https://github.com/VladimirMonin/hermes-mailcloud/releases/tag/v0.1.0).
+[0.2.0 GitHub Release](https://github.com/VladimirMonin/hermes-mailcloud/releases/tag/v0.2.0).
 Compare its local SHA-256 to the matching entry (PowerShell `Get-FileHash -Algorithm
 SHA256` or POSIX `sha256sum`), then use the local wheel path as the install argument.
 A checksum checks integrity, not independent publisher authenticity. Runtime
@@ -100,7 +100,7 @@ For example, with Python 3.12 available via the Windows Python launcher:
 
 ```powershell
 py -3.12 -m venv .hmc-env
-.\.hmc-env\Scripts\python.exe -m pip install https://github.com/VladimirMonin/hermes-mailcloud/releases/download/v0.1.0/hermes_mailcloud-0.1.0-py3-none-any.whl
+.\.hmc-env\Scripts\python.exe -m pip install https://github.com/VladimirMonin/hermes-mailcloud/releases/download/v0.2.0/hermes_mailcloud-0.2.0-py3-none-any.whl
 .\.hmc-env\Scripts\hermes-mailcloud.exe version
 .\.hmc-env\Scripts\hermes-mailcloud.exe --json setup
 ```
@@ -163,13 +163,13 @@ selects `312`. Do not copy bindings manually or use MSYS/WSL permission emulatio
 as a replacement for native Windows ACLs. Linux does not require pywin32.
 See [third-party notices](../THIRD_PARTY_NOTICES.md#pywin32-notices).
 
-Local full offline, clean-wheel, real console-launcher and fake-backed
-file/public/batch checks cover Windows/Linux with Python 3.12 and 3.13, including the native journal
-and subprocess boundary. The Windows checks used elevated processes: genuine
-ordinary-user Windows qualification remains incomplete. Evaluate remote GitHub
-Actions separately for the exact commit. Official default HTTPS setup, managed
-discovery and real local-file rclone use are checked separately from fake-backed
-scenarios. See the
+CI targets Ubuntu/Windows × Python 3.12/3.13 with offline, build and clean-wheel
+checks, including native journal/process boundaries; inspect the exact commit's
+Actions results. Local 0.2.0 launcher/direct-API/fake-backed qualification uses
+native Windows x64/Python 3.12 with elevation, not ordinary-user Windows.
+Ordinary-user qualification remains incomplete. Earlier official default HTTPS
+setup, managed discovery and real local-file rclone checks are retained for
+unchanged installer behavior, not fresh 0.2.0 transport evidence. See the
 [portable package smoke](../README.md#package-smoke-test) for isolated wheel
 validation; it is distinct from installing the operational command above and
 does not prove Mail.ru access or complete release readiness.
@@ -263,9 +263,9 @@ There are **two different configuration files**. Application `--config` selects
 HMC profiles/policy, not backend authentication storage. `RCLONE_CONFIG` selects
 the separate rclone file and must be present in the **invoking process environment**.
 Keep the matching existing application profile explicitly selected with `--profile`.
-In current-source builds, an omitted option uses `HMC_PROFILE`, then `default`;
-explicit `--profile default` wins over the environment. For older pinned release
-assets, use the explicit option rather than assuming the new source behavior.
+In 0.2.0, an omitted option uses `HMC_PROFILE`, then `default`;
+explicit `--profile default` wins over the environment. For historical 0.1.0
+assets, use the explicit option rather than assuming 0.2.0 behavior.
 A default `remote_not_configured` refusal does not establish that saved credentials
 are missing.
 
@@ -366,14 +366,13 @@ Start a fresh Hermes session or run `/reload-skills`, then requests such as “u
 
 Use the checkout only for development:
 
-Current source-built wheels expose the internal Python
+The 0.2.0 wheel exposes the supported Python
 [`MailCloudApplication` interface](01-architecture.md#current-in-process-application-interface)
 for all shipped operations: version/read/file/public plus `setup`, `doctor`,
 `batch(document)` and `batch_file(Path)` — fifteen real methods. All CLI handlers
-use that owner; private transitional helpers are not a second public route.
-The older immutable `v0.1.0` wheel linked above predates this boundary, even though
-the development package still reports `0.1.0`.
-For a Python consumer, install the exact accepted source-built wheel into that
+use that owner, without a legacy CLI execution route.
+The historical immutable `v0.1.0` wheel predates this boundary.
+For a Python consumer, install the exact accepted 0.2.0 wheel into that
 consumer's environment; an operational uv tool has its own interpreter and does
 not add imports to an unrelated Python process. Verify artifact/import provenance,
 not just the version string. This does not require an HTTP server or a replacement

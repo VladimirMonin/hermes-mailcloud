@@ -13,7 +13,7 @@ Confirmed project facts:
 - dependencies and commands are managed with `uv` and the committed `uv.lock`;
 - source lives in `src/hermes_mailcloud/` and tests in `tests/`;
 - schemas are under `schemas/`, while architecture and proposed contracts are under `docs/`;
-- current-source `hermes_mailcloud.application` exposes all shipped operations through `MailCloudApplication`, including `setup`, `doctor`, `batch(document)` and `batch_file(Path)` alongside version/read/file/public methods; all shipped CLI handlers use that owner. Private transitional glue is not a supported fallback. See the [current application interface](docs/01-architecture.md#current-in-process-application-interface); an older release wheel does not gain it from a matching version string;
+- the 0.2.0 `hermes_mailcloud.application` exposes all shipped operations through `MailCloudApplication`, including `setup`, `doctor`, `batch(document)` and `batch_file(Path)` alongside version/read/file/public methods; CLI is its input/output adapter, with no legacy execution route. See the [current application interface](docs/01-architecture.md#current-in-process-application-interface); historical 0.1.0 wheels do not contain it;
 - live cloud tests are opt-in and require explicit environment configuration.
 
 ## Commands

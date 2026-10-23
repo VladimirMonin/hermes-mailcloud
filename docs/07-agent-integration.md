@@ -48,7 +48,7 @@ assume an automatic write retry.
 dry-run → проверить JSON plan → выполнить с обязательным для команды подтверждением → прочитать result/error
 ```
 
-### Прямой Python-вызов в source-built пакете
+### Прямой Python-вызов в 0.2.0
 
 Агент в том же Python-окружении может использовать поддерживаемый
 [`MailCloudApplication`](01-architecture.md#current-in-process-application-interface)
@@ -95,7 +95,7 @@ item error прежние outcomes сохраняются; пакет не ст�
 безопасным для автоматического replay. Неверный UTF-8 и defaults:null — отказ/2;
 version 1.0 допустим, bool/string/nonfinite не заменяют integer version.
 
-Устанавливайте точный accepted source-built wheel в окружение consumer-а: старый `v0.1.0` release asset
+Устанавливайте точный accepted wheel 0.2.0 в окружение consumer-а: старый `v0.1.0` release asset
 не содержит этот API, а отдельный `uv tool` interpreter не добавляет imports
 в Python-процесс агента. См. [границы установки](11-local-installation.md#6-development-and-updates).
 Пример планирования не разрешает реальную мутацию без intent владельца.

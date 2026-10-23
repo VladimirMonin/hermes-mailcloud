@@ -32,7 +32,6 @@ def test_source_drift_live_doctor_dry_run_refuses_before_configuration(monkeypat
         reached.append("config")
         raise AssertionError("live dry-run must refuse before loading configuration")
 
-    monkeypatch.setattr(cli, "resolve_config", forbidden)
     monkeypatch.setattr(composition, "load_config", forbidden)
     result = CliRunner().invoke(cli.app, ["doctor", "--live", "--yes", "--dry-run", "--json"])
     assert result.exit_code == 2, result.output

@@ -77,11 +77,11 @@ hermes-mailcloud publish ./report.pdf /Hermes/public/report.pdf --json --yes
 
 ---
 
-В текущих source-built пакетах пропущенный `--profile` не перекрывает
-`HMC_PROFILE`; явный `--profile default` имеет приоритет над env. Это относится
-также к metadata `version` без чтения config. Старый pinned release wheel не
-получает исправление только от совпадения строки версии; для него выбирайте
-нужное подключение явным флагом.
+В 0.2.0 пропущенный `--profile` не перекрывает `HMC_PROFILE`; явный
+`--profile default` имеет приоритет над env. Это относится также к metadata
+`version` без чтения config. Для исторического 0.1.0 wheel выбирайте нужный
+профиль явно. Версия package 0.2.0 не меняет version 1 у batch JSON и не
+создаёт новую схему envelope.
 
 ## 3.1. Команда `version`
 
@@ -274,7 +274,7 @@ generated `/TEST/hermes-mailcloud-*` roots only after read-only readiness passes
 records those roots, and cleans up only same-run objects. Existing objects outside
 `/TEST` remain metadata/list-only.
 
-В текущих source-built пакетах application проверяет genuine boolean/options,
+В 0.2.0 application проверяет genuine boolean/options,
 затем live без yes отклоняет как confirmation_required/9; сочетание live+yes+
 dry-run — как invalid_arguments/2. Отказы происходят до config/backend и не
 маскируются ошибкой env profile metadata. Read-only doctor с dry-run продолжает
@@ -852,7 +852,7 @@ execution returns process exit `11` with `ok: false`, `result.status:
 "partial_failure"`, and no top-level `error`; each item has exactly one of its own
 `result` or `error`.
 
-Для текущего source-built Python API оба inputs используют настоящий parser до
+В Python API 0.2.0 оба inputs используют настоящий parser до
 configuration и один execution path с config/runner на пакет. Нельзя передать
 «доверенный» `BatchPlan` вместо JSON-shaped документа. Schema и parser принимают
 version 1 или конечное integer-valued 1.0, но не bool/string/nonfinite; omitted

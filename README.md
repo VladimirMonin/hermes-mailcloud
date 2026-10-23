@@ -2,7 +2,7 @@
 
 Agent CLI for Mail.ru Cloud — rclone-backed, JSON-first, safety-aware.
 
-> Status: **0.1.0 stable release** — `version`, `doctor`, `ls`, `stat`,
+> **0.2.0 — command-first** — `version`, `doctor`, `ls`, `stat`,
 > `mkdir`, `upload`, `download`, `mv`, `cp`, guarded `rm`, `publish`, `link`,
 > and `batch` are implemented through the typed rclone boundary. Explicit `setup`
 > prepares the external rclone dependency for the current user. `publish`/`link`
@@ -11,27 +11,26 @@ Agent CLI for Mail.ru Cloud — rclone-backed, JSON-first, safety-aware.
 > dry-runs, and reports ordered partial failures. `doctor` defaults to read-only
 > rclone/config/remote checks; generated `/TEST` probes require `--live --yes`.
 > `unlink`, direct-download resolution, link expiry/passwords, and a full link
-> audit are not shipped in v0.1.
+> audit are not shipped.
 > Full documentation: `docs/`
 
 ## Version and platform support
 
-The current stable package is **0.1.0**, published on GitHub under immutable
-`v0.1.0`, **not on PyPI**. This promotes the accepted 0.1 functionality and updates
-version/installation documentation; it does not add runtime features or create
-new compatibility evidence. See the [release notes](docs/10-v0.1-release-notes.md)
+Version **0.2.0** adds the supported in-process Application API while retaining
+the JSON-first CLI and existing safety policies. Distribution is on GitHub under
+immutable version tags, **not on PyPI**. See the [0.2.0 release notes](docs/12-v0.2-release-notes.md)
 and [artifact installation](docs/11-local-installation.md#install-from-a-release-wheel).
-The `v0.1.0a0` source snapshot and `v0.1.0a1` prerelease remain immutable history.
-A stable release label is not a claim of universal platform qualification.
-Current sources include POSIX and native
-Windows journal and subprocess backends. Local full offline, clean-wheel, real-launcher and
-fake-backed runtime checks cover Windows/Linux with Python 3.12 and 3.13. The
-Windows checks used elevated processes, not ordinary-user qualification.
-Explicit installed setup, managed discovery and real rclone local-file operations
-are checked on those targets; default official HTTPS acquisition is checked on
-both OSes. Genuine ordinary-user Windows qualification remains incomplete;
-elevated checks do not establish an Administrator requirement. Remote GitHub
-Actions results must be checked for the specific commit. Local/fake-backed
+The `v0.1.0` release and earlier alpha assets remain historical and do not contain
+the Application API.
+
+Python **>=3.12** is declared; CI targets Ubuntu/Windows × Python 3.12/3.13 with
+offline, build and clean installed-wheel checks. Check Actions for the exact
+commit, not a previous version. Local 0.2.0 installed qualification uses native
+Windows x64/Python 3.12 in an elevated context; ordinary-user Windows remains
+unqualified. This establishes neither an Administrator requirement nor universal
+platform support. POSIX and native Windows storage/process backends are retained.
+Earlier explicit setup/default official HTTPS and local-file rclone checks apply
+to unchanged installer behavior, not fresh 0.2.0 network qualification. Fake-backed
 checks do not prove Mail.ru access. See the [Windows boundaries and limits](docs/11-local-installation.md#windows-configuration).
 
 ## Quick start (development)
@@ -54,7 +53,7 @@ and not a backend/cloud requirement. Python **>=3.12** is declared; 3.12/3.13 ar
 the qualification targets. Use the pinned GitHub wheel, not a registry-name install:
 
 ```console
-uv tool install --python 3.12 https://github.com/VladimirMonin/hermes-mailcloud/releases/download/v0.1.0/hermes_mailcloud-0.1.0-py3-none-any.whl
+uv tool install --python 3.12 https://github.com/VladimirMonin/hermes-mailcloud/releases/download/v0.2.0/hermes_mailcloud-0.2.0-py3-none-any.whl
 hermes-mailcloud --json setup
 hermes-mailcloud version
 hermes-mailcloud --json doctor
@@ -133,22 +132,20 @@ roots and leaves existing cloud data metadata/list-only.
 CLI / Python consumer → MailCloudApplication → services + policy → rclone subprocess → Mail.ru Cloud
 ```
 
-Current source-built packages also expose a synchronous, in-process Python entry:
+The 0.2.0 package exposes a synchronous, in-process Python entry:
 `hermes_mailcloud.application.MailCloudApplication`, with **`version`, `setup`,
 `doctor`, `ls`, `stat`, `mkdir`, `upload`, `download`, `mv`, `cp`, `rm`, `publish`,
 `link`, `batch(document)` and `batch_file(Path)`**. All shipped CLI handlers use
-that same application owner. This is an internal callable boundary, not an HTTP
+that same application owner. This is a supported callable boundary, not an HTTP
 service. It returns a safe typed envelope without printing or requiring
 Typer/Click/Rich. Existing confirmation, overwrite, private-journal and no-write-retry
 policies remain. Doctor live admission precedes configuration; both batch inputs
 retain ordered partial outcomes and exit 11, without a top-level error.
 See the [application interface and example](docs/01-architecture.md#current-in-process-application-interface).
 
-The immutable `v0.1.0` release wheel above predates this boundary; the unchanged
-package version alone does not identify a source-built candidate. Transitional
-glue cleanup and final delivery qualification remain in the
-[command-first roadmap](docs/plans/command-first-refactor.md); the implemented
-surface is documented above, not inferred from that plan. Historical options remain in
+CLI contains only argument/help/output/exit adaptation, without a legacy execution
+route. The [original refactor plan](docs/plans/command-first-refactor.md) records
+design intent, not the current API reference or a progress report. Historical options remain in
 [`docs/01-architecture.md`](docs/01-architecture.md) and
 [`docs/03-development-plan.md`](docs/03-development-plan.md).
 

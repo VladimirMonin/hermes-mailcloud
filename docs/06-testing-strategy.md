@@ -13,8 +13,13 @@
 прикладного API без Typer и вызов того же владельца через настоящий CLI.
 Текущий поддерживаемый API охватывает все shipped операции, включая `setup`,
 `doctor`, `batch(document)` и `batch_file(Path)`; connected проверки находятся в
-`tests/application/`. Окончательная очистка transitional glue и qualification всей
-поставки остаются в [полном плане](plans/command-first-refactor.md).
+`tests/application/`. `test_boundaries.py` проверяет фактическое транзитивное
+замыкание imports, отсутствие CLI orchestration и исполнение настоящего source
+subprocess при запрещённой записи business attributes в CLI. Drivers заменяют
+только внешний execution edge через `application.composition.create_backend`;
+application/services/parser/journal/runner остаются настоящими. Отдельный installed
+процесс блокирует CLI SDK до первого product import. [Исходный план](plans/command-first-refactor.md)
+сохраняет основания и критерии, не заменяя эти проверки.
 Внешний rclone/облако можно заменять; сам проверяемый прикладной сценарий — нельзя.
 Результаты, коды ошибок, сохранность файла/журнала, отказ до эффекта, отсутствие
 повторной записи и возможность следующей операции важнее одного `mock.called`.
