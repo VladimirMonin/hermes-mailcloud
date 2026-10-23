@@ -579,6 +579,17 @@ def exercise(
     require("Usage" in stdout and "doctor" in stdout, "installed launcher help failed")
     stdout, stderr = commands.run("console-version-no-injection", [str(launcher), "version"])
     require(not stderr and stdout.strip() == info["version"], "installed launcher version failed")
+    stdout, stderr = commands.run(
+        "console-setup-dry-no-injection", [str(launcher), "setup", "--dry-run", "--json"]
+    )
+    setup_plan = json_envelope(
+        stdout,
+        stderr,
+        operation="setup",
+        exit_code=0,
+        validator=validate["result-envelope.schema.json"],
+    )
+    require(setup_plan["result"]["status"] == "dry_run", "uninjected setup did not plan")
     for operation in ("version", "doctor"):
         stdout, stderr = commands.run(
             "console-json-" + operation + "-no-injection", [str(launcher), "--json", operation]
@@ -661,6 +672,21 @@ def exercise(
         ("overwrite", "upload", 2),
         ("confirmation", "publish", 9),
         ("outside-public", "link", 9),
+        ("setup-dry", "setup", 0),
+        ("setup-install", "setup", 0),
+        ("setup-available", "setup", 0),
+        ("doctor", "doctor", 0),
+        ("doctor-confirmation", "doctor", 9),
+        ("doctor-live-dry", "doctor", 2),
+        ("doctor-live", "doctor", 0),
+        ("batch-document", "batch", 0),
+        ("batch-file", "batch", 0),
+        ("batch-dry", "batch", 0),
+        ("batch-partial-False", "batch", 11),
+        ("batch-partial-True", "batch", 11),
+        ("batch-unexpected", "batch", 11),
+        ("batch-null", "batch", 2),
+        ("batch-utf8", "batch", 2),
     ):
         require(api_report["exits"][name] == code, "wrong direct API exit")
         json_envelope(
@@ -668,7 +694,11 @@ def exercise(
             "",
             operation=operation,
             exit_code=code,
-            validator=validate["result-envelope.schema.json"],
+            validator=validate[
+                "doctor-report.schema.json"
+                if operation == "doctor" and code == 0
+                else "result-envelope.schema.json"
+            ],
         )
     require(
         api_report["payloads"]["ls"]["result"]["items"]
@@ -687,7 +717,8 @@ def exercise(
         ],
         "direct API execution/refusal boundary changed",
     )
-    api_calls = calls()[len(before_api) :]
+    all_api_calls = calls()[len(before_api) :]
+    api_calls = all_api_calls[:13]
     require(
         [row[0] for row in api_calls]
         == ["lsjson"] * 4
@@ -753,6 +784,76 @@ def exercise(
         and api_report["payloads"]["outside-public"]["error"]["kind"] == "unsafe_public_path",
         "direct API publication admission/result changed",
     )
+    groups = api_report["call_groups"]
+    require(
+        [row for group in groups.values() for row in group] == all_api_calls[13:],
+        "unaccounted system/batch backend calls",
+    )
+    for label in (
+        "setup-dry",
+        "doctor-confirmation",
+        "doctor-live-dry",
+        "batch-dry",
+        "batch-null",
+        "batch-utf8",
+    ):
+        require(groups[label] == [], "system/batch admission or plan invoked a backend")
+    require(
+        groups["doctor"] == [["version"], ["listremotes"], ["lsd", "fake:"], ["about", "fake:"]],
+        "read-only doctor order changed",
+    )
+    require(
+        resources["setup_active_bytes_match"]
+        and resources["setup_destination_owned"]
+        and resources["setup_version_execution_calls"] == 1,
+        "installed setup owner/resource proof failed",
+    )
+    require(
+        api_report["payloads"]["setup-install"]["result"]["status"] == "installed"
+        and api_report["payloads"]["setup-available"]["result"]["status"] == "already_available",
+        "setup outcome changed",
+    )
+    live = api_report["payloads"]["doctor-live"]["result"]
+    require(
+        live["checks"]["file_cycle"]
+        and live["checks"]["cleanup"]
+        and live["capabilities"]["public_link_unlink"] == "unsupported"
+        and len(live["test_roots"]) == len(set(live["test_roots"])) == 3
+        and resources["doctor_http_calls"] == 6,
+        "installed real doctor/probe/HTTP workflow failed",
+    )
+    require(
+        all(
+            any(value.startswith("fake:/TEST/hermes-mailcloud-") for value in row)
+            for row in groups["doctor-live"]
+            if row[0] in {"mkdir", "copyto", "moveto", "deletefile", "rmdir", "link"}
+        ),
+        "doctor probe mutation escaped its generated roots",
+    )
+    for label in ("batch-document", "batch-file"):
+        require(
+            [row[0] for row in groups[label]] == ["mkdir", "copyto"]
+            and api_report["payloads"][label]["result"]["succeeded"] == 2,
+            "installed batch input did not reach actual owners",
+        )
+    require(resources["batch_download_bytes_equal"], "installed batch bytes changed")
+    for label, total in (
+        ("batch-partial-False", 2),
+        ("batch-partial-True", 3),
+        ("batch-unexpected", 2),
+    ):
+        partial = api_report["payloads"][label]
+        require(
+            "error" not in partial
+            and partial["result"]["total"] == len(groups[label]) == total
+            and partial["result"]["items"][0]["ok"] is True,
+            "batch lost its ordered prior result",
+        )
+    require(
+        api_report["payloads"]["batch-unexpected"]["result"]["items"][1]["error"]["kind"]
+        == "unknown_error",
+        "unexpected batch item was not safely retained",
+    )
     api_components = api_report["provenance"]["loaded_components"]
     require("hermes_mailcloud.cli" not in api_components, "API provenance pre-imported CLI")
     require(
@@ -816,6 +917,30 @@ def exercise(
         )
         return payload, new_calls
 
+    for label, arguments, operation, code, kind in (
+        ("system-setup-dry", ["setup", "--dry-run", "--json"], "setup", 0, None),
+        (
+            "system-doctor-no-confirmation",
+            ["doctor", "--live", "--json"],
+            "doctor",
+            9,
+            "confirmation_required",
+        ),
+        (
+            "system-doctor-live-dry",
+            ["doctor", "--live", "--yes", "--dry-run", "--json"],
+            "doctor",
+            2,
+            "invalid_arguments",
+        ),
+    ):
+        case(label, arguments, operation, expected=code, expected_kind=kind, no_backend=True)
+    doctor, doctor_calls = case("system-doctor", ["doctor", "--json"], "doctor")
+    validate["doctor-report.schema.json"].validate(doctor)
+    require(
+        doctor["result"]["checks"]["cloud_access"] and len(doctor_calls) == 4,
+        "fake-backed CLI doctor readiness failed",
+    )
     source = root / "local ü & files" / "report 'literal'.txt"
     source.parent.mkdir()
     source.write_text("synthetic wheel payload", encoding="utf-8")
@@ -876,6 +1001,40 @@ def exercise(
         )
         return path
 
+    for label, document, code, kind in (
+        (
+            "batch-float-version",
+            {"version": 1.0, "operations": [{"op": "ls", "remote_path": "/TEST"}]},
+            0,
+            None,
+        ),
+        (
+            "batch-null-defaults",
+            {"version": 1, "defaults": None, "operations": [{"op": "ls", "remote_path": "/TEST"}]},
+            2,
+            "invalid_arguments",
+        ),
+    ):
+        schema_path = root / (label + ".json")
+        schema_path.write_text(json.dumps(document), encoding="utf-8")
+        case(
+            label,
+            ["batch", str(schema_path), "--dry-run", "--json"],
+            "batch",
+            expected=code,
+            expected_kind=kind,
+            no_backend=True,
+        )
+    invalid_utf8 = root / "invalid-utf8.json"
+    invalid_utf8.write_bytes(b"\xff")
+    case(
+        "batch-invalid-utf8",
+        ["batch", str(invalid_utf8), "--json"],
+        "batch",
+        expected=2,
+        expected_kind="invalid_arguments",
+        no_backend=True,
+    )
     public_plan = plan(
         "public-plan",
         [

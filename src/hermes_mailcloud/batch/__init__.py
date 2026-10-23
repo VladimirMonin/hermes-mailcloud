@@ -15,7 +15,7 @@ from ..commands.read import ReadCommands
 from ..commands.remove import RemoveCommand
 from ..commands.transfer import TransferCommands
 from ..config import ConfigError, ResolvedConfig
-from ..core.errors import ErrorKind, ErrorPayload, MailCloudError
+from ..core.errors import ErrorKind, ErrorPayload, MailCloudError, unknown_error
 from ..core.policy import WRITE_OPERATIONS, OperationRequest, validate_operation
 from ..journal import LinkJournal
 
@@ -106,7 +106,7 @@ def parse_batch_file(plan_path: Path) -> BatchPlan:
         raw_document = plan_path.read_text(encoding="utf-8")
     except MailCloudError:
         raise
-    except OSError as exc:
+    except (OSError, UnicodeDecodeError) as exc:
         raise MailCloudError(
             ErrorPayload(ErrorKind.INVALID_ARGUMENTS, "batch plan file could not be read")
         ) from exc
@@ -133,7 +133,7 @@ def parse_batch_document(document: object) -> BatchPlan:
     if "description" in payload and not _is_nonempty_string(payload["description"]):
         raise _invalid("batch plan description must be a non-empty string")
 
-    defaults = _parse_defaults(payload.get("defaults"))
+    defaults = _parse_defaults(payload.get("defaults", {}))
     raw_operations = payload["operations"]
     if not isinstance(raw_operations, list) or not raw_operations:
         raise _invalid("batch plan operations must be a non-empty array")
@@ -204,13 +204,14 @@ class BatchCommands:
                     yes=yes,
                     read_retries=effective_read_retries,
                 )
-            except MailCloudError as exc:
+            except Exception as exc:
+                error = exc.error if isinstance(exc, MailCloudError) else unknown_error()
                 items.append(
                     {
                         "index": operation.index,
                         "operation": operation.operation,
                         "ok": False,
-                        "error": ErrorPayload(exc.error.kind, exc.error.message).to_payload(),
+                        "error": ErrorPayload(error.kind, error.message).to_payload(),
                     }
                 )
                 if not plan.defaults.continue_on_error:
@@ -391,9 +392,7 @@ class BatchCommands:
             )
 
 
-def _parse_defaults(raw_defaults: object | None) -> BatchDefaults:
-    if raw_defaults is None:
-        return BatchDefaults(overwrite="never", continue_on_error=False)
+def _parse_defaults(raw_defaults: object) -> BatchDefaults:
     defaults = _mapping(raw_defaults, "batch defaults must be an object")
     _reject_unknown_fields(defaults, _DEFAULT_FIELDS, "batch defaults contain unsupported fields")
     overwrite = defaults.get("overwrite", "never")
@@ -484,7 +483,9 @@ def _bool_field(operation: BatchOperation, field: str, *, default: bool) -> bool
 
 
 def _is_integer(value: object) -> bool:
-    return not isinstance(value, bool) and isinstance(value, int)
+    return not isinstance(value, bool) and (
+        isinstance(value, int) or isinstance(value, float) and value.is_integer()
+    )
 
 
 def _is_nonempty_string(value: object) -> bool:

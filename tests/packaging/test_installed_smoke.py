@@ -332,6 +332,23 @@ def test_standalone_driver_rejects_a_source_checkout_runtime_before_component_im
     assert b"checkout" in result.stderr
 
 
+def test_fake_probe_download_preserves_native_text_payload_bytes(tmp_path: Path) -> None:
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "_fixture_driver", ROOT / "tests/helpers/installed_fake_driver.py"
+    )
+    driver = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(driver)
+    source, destination = tmp_path / "source.txt", tmp_path / "downloaded.txt"
+    source.write_text("hermes-mailcloud probe\n", encoding="utf-8")
+    code = driver.backend(
+        {"log": str(tmp_path / "calls.jsonl")},
+        ["copyto", "fake:/TEST/hermes-mailcloud-fixture/probe.txt", str(destination)],
+    )
+    assert code == 0 and destination.read_bytes() == source.read_bytes()
+
+
 def test_command_deadline_kills_an_actually_started_own_worker_tree(smoke, tmp_path: Path) -> None:
     ready = tmp_path / "self-ready.json"
     nonce = uuid.uuid4().hex

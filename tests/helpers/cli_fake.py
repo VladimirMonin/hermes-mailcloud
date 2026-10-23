@@ -155,6 +155,8 @@ def isolated_environment(root: Path) -> dict[str, str]:
     empty_path = root / "empty-path"
     for directory in (home, config_home, app_data, local_app_data, temp, empty_path):
         directory.mkdir(parents=True, exist_ok=True)
+    backend_config = root / "empty-rclone.conf"
+    backend_config.write_bytes(b"")
     environment = {
         "PATH": str(empty_path),
         "HOME": str(home),
@@ -164,6 +166,10 @@ def isolated_environment(root: Path) -> dict[str, str]:
         "LOCALAPPDATA": str(local_app_data),
         "TEMP": str(temp),
         "TMP": str(temp),
+        "TMPDIR": str(temp),
+        "RCLONE_CONFIG": str(backend_config),
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
         "PYTHONUTF8": "1",
         "PYTHONIOENCODING": "utf-8",
         "PYTHONPATH": str(SRC_ROOT),

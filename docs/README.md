@@ -13,7 +13,7 @@
 - [`../tools/project-foundation/README.md`](../tools/project-foundation/README.md) — complete imported methodology, skills and source attribution; not current product behavior.
 
 - [`00-research-summary.md`](00-research-summary.md) — research summary.
-- [`01-architecture.md`](01-architecture.md#current-in-process-application-interface) — current source-built version/read/file/public Application API and remaining system/batch CLI ownership; historical proposals are labeled separately.
+- [`01-architecture.md`](01-architecture.md#current-in-process-application-interface) — current fifteen-method Application API, shared CLI ownership, setup/doctor/batch semantics and remaining private-glue cleanup; historical proposals are labeled separately.
 - [`02-command-contract.md`](02-command-contract.md) — frozen CLI contract, explicit dependency setup, and labeled future proposals.
 - [`03-development-plan.md`](03-development-plan.md) — implementation waves.
 - [`04-probe-plan.md`](04-probe-plan.md) — implemented safe probe harness and planned live capability evidence.

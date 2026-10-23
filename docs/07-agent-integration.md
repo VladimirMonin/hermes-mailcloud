@@ -53,16 +53,22 @@ dry-run → проверить JSON plan → выполнить с обязат�
 Агент в том же Python-окружении может использовать поддерживаемый
 [`MailCloudApplication`](01-architecture.md#current-in-process-application-interface)
 без Typer/Click/Rich и без запуска CLI-процесса. Доступны `version`, `ls`, `stat`,
-`mkdir`, `upload`, `download`, `mv`, `cp`, `rm`, `publish`, `link` — не внутренние
-command services и не ещё не реализованные system/batch методы.
+`mkdir`, `upload`, `download`, `mv`, `cp`, `rm`, `publish`, `link`, `setup`, `doctor`,
+`batch(document)` и `batch_file(Path)`. Используйте эту поверхность, не внутренние
+command services и не вызов CLI для каждого batch item.
 
 ```python
 from hermes_mailcloud.application import CallOptions, MailCloudApplication
 
 application = MailCloudApplication()
-planned = application.mkdir(
-    "/TEST/example-plan", options=CallOptions(dry_run=True)
-)
+document = {
+    "version": 1.0,
+    "operations": [
+        {"op": "ls", "remote_path": "/Hermes"},
+        {"op": "mkdir", "remote_path": "/TEST/example-plan"},
+    ],
+}
+planned = application.batch(document, options=CallOptions(dry_run=True))
 payload = planned.to_payload()
 exit_code = planned.exit_code
 ```
@@ -70,13 +76,26 @@ exit_code = planned.exit_code
 Результат уже санитизирован до доступа к его полям; API ничего не печатает и не
 завершает процесс. Проверяйте `ok`/typed `error.kind`/`exit_code`, не текст ошибки.
 Реальные `rm`/`publish` требуют `CallOptions(yes=True)`; standalone `link` — нет.
-Все guards и private-journal правила сохраняются, write retries по умолчанию нулевые,
-explicit positive budget запрещён даже в dry-run. После timeout/unknown/ошибки journal
+Все guards и private-journal правила сохраняются. Для standalone file/public writes
+retry budget по умолчанию нулевой; explicit positive budget запрещён даже в dry-run. После timeout/unknown/ошибки journal
 не повторяйте write автоматически: эффект мог уже состояться. Нужен readback и
 решение в пределах действующих полномочий, не предполагаемый rollback.
 
-`setup`, `doctor` и `batch` вызываются прежним CLI-путём. Устанавливайте точный
-accepted source-built wheel в окружение consumer-а: старый `v0.1.0` release asset
+`setup()` — явная подготовка pinned зависимости, без configured cloud remote и без
+file backend; optional archive передаётся как `Path`. Для doctor live без yes
+возвращается confirmation/9; live+yes+dry-run даёт invalid_arguments/2, до config.
+Read-only doctor с dry-run всё равно читает backend. Проверяйте readiness fields,
+не только успешность diagnostic envelope.
+
+`batch_file(Path(...))` использует тот же parser/execution, что `batch(document)`.
+Любой batch write требует outer yes; dry-run планирует все items без backend.
+При exit 11 разбирайте ordered `result.items`: top-level error отсутствует, total
+считает попытки, stop/continue определён defaults плана. После ordinary unexpected
+item error прежние outcomes сохраняются; пакет не становится транзакцией или
+безопасным для автоматического replay. Неверный UTF-8 и defaults:null — отказ/2;
+version 1.0 допустим, bool/string/nonfinite не заменяют integer version.
+
+Устанавливайте точный accepted source-built wheel в окружение consumer-а: старый `v0.1.0` release asset
 не содержит этот API, а отдельный `uv tool` interpreter не добавляет imports
 в Python-процесс агента. См. [границы установки](11-local-installation.md#6-development-and-updates).
 Пример планирования не разрешает реальную мутацию без intent владельца.

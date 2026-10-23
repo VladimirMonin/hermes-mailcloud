@@ -1,4 +1,4 @@
-"""In-process version/read/file/public operations; no CLI imports or import-time I/O."""
+"""Supported terminal-independent application API; no import-time I/O."""
 
 from ..config import ConfigOverrides
 from .contracts import Backend, BackendFactory, CallOptions, ConfigLoader, Overwrite

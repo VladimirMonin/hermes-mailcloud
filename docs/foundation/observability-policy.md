@@ -17,6 +17,16 @@ summary: "Полезный безопасный вывод без второй �
 `core/result.py` владеет envelope; `output.py` — его безопасной сериализацией;
 `cli.py` — выводом. JSON-режим выдаёт один envelope в stdout, human-ошибки
 используют stderr. Наличие `--debug` не доказывает отдельный реализованный sink.
+Поддерживаемый application возвращает безопасную проекцию envelope, metadata и
+warnings до прямого доступа к полям, не печатает и не создаёт второй serializer.
+
+Partial batch сохраняет ordered `result.items`, exit 11 и отсутствие top-level
+error; total — число попыток, не обещание выполнения всего плана. Unexpected ordinary
+item exception даёт фиксированный safe unknown item error без exception content,
+сохраняя прежние outcomes и stop/continue. Ошибки preflight остаются top-level
+отказами; `BaseException` не маскируется обычным результатом. У doctor успешный
+read-only report с отрицательными checks не означает cloud readiness. Эти различия
+сохраняются напрямую и в CLI, не заменяются диагностическим текстом или rollback claim.
 
 Постоянного диагностического logger/handler, ротации и support-export этот документ
 не объявляет. Приватный `links.jsonl` — операционное хранилище capability-ссылок,

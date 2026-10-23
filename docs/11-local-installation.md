@@ -368,11 +368,11 @@ Use the checkout only for development:
 
 Current source-built wheels expose the internal Python
 [`MailCloudApplication` interface](01-architecture.md#current-in-process-application-interface)
-for `version`, `ls`, `stat`, `mkdir`, `upload`, `download`, `mv`, `cp`, `rm`,
-`publish` and `link`. Their CLI handlers use the same application owner; system/
-batch operations still use the CLI, not speculative Python methods. The older
-immutable `v0.1.0` wheel linked above predates this boundary, even though the
-development package still reports `0.1.0`.
+for all shipped operations: version/read/file/public plus `setup`, `doctor`,
+`batch(document)` and `batch_file(Path)` — fifteen real methods. All CLI handlers
+use that owner; private transitional helpers are not a second public route.
+The older immutable `v0.1.0` wheel linked above predates this boundary, even though
+the development package still reports `0.1.0`.
 For a Python consumer, install the exact accepted source-built wheel into that
 consumer's environment; an operational uv tool has its own interpreter and does
 not add imports to an unrelated Python process. Verify artifact/import provenance,

@@ -365,3 +365,29 @@ def test_read_only_doctor_report_has_no_mutating_checks() -> None:
             },
         }
     )
+
+
+@pytest.mark.parametrize(
+    "fragment,valid",
+    [
+        ({"version": 1}, True),
+        ({"version": 1.0}, True),
+        ({"version": True}, False),
+        ({"version": "1"}, False),
+        ({"version": float("nan")}, False),
+        ({"version": 1, "defaults": None}, False),
+    ],
+)
+def test_source_drift_batch_structure_matches_the_frozen_schema(fragment, valid) -> None:
+    from hermes_mailcloud.batch import parse_batch_document
+    from hermes_mailcloud.core.errors import ErrorKind, MailCloudError
+
+    document = {**fragment, "operations": [{"op": "mkdir", "remote_path": "/TEST/schema"}]}
+    assert _validator("batch-plan").is_valid(document) is valid
+    if valid:
+        parsed = parse_batch_document(document)
+        assert len(parsed.operations) == 1 and parsed.operations[0].operation == "mkdir"
+    else:
+        with pytest.raises(MailCloudError) as caught:
+            parse_batch_document(document)
+        assert caught.value.error.kind is ErrorKind.INVALID_ARGUMENTS

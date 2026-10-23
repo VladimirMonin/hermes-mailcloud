@@ -1,13 +1,15 @@
-"""Synchronous, terminal-independent file and public application operations."""
+"""Synchronous, terminal-independent application operations."""
 
 from __future__ import annotations
 
 import os
 from collections.abc import Callable, Mapping
+from pathlib import Path
 from types import MappingProxyType
 from typing import Any
 
 from .. import __version__
+from ..batch import BatchCommands, BatchPlan, parse_batch_document, parse_batch_file
 from ..commands.mkdir import MkdirCommand
 from ..commands.move_copy import MoveCopyCommands
 from ..commands.public import PublicCommands
@@ -15,13 +17,21 @@ from ..commands.read import ReadCommands
 from ..commands.remove import RemoveCommand
 from ..commands.transfer import TransferCommands
 from ..config import ResolvedConfig, resolve_profile_name
-from ..core.errors import ErrorPayload, MailCloudError, unknown_error
+from ..core.errors import ErrorKind, ErrorPayload, MailCloudError, unknown_error
 from ..core.result import ResultEnvelope
+from ..doctor import DoctorCommands
 from ..output import sanitize_value
 from ..probes.core import HttpOpener
 from . import composition
 from .contracts import Backend, BackendFactory, CallOptions, ConfigLoader, Overwrite
-from .validation import require_bool, require_overwrite, require_string, validate_options
+from .validation import (
+    invalid_argument,
+    require_bool,
+    require_overwrite,
+    require_path,
+    require_string,
+    validate_options,
+)
 
 
 class MailCloudApplication:
@@ -55,6 +65,92 @@ class MailCloudApplication:
         return self._invoke(
             "version", options, lambda _options, _metadata: {"version": __version__}
         )
+
+    def setup(
+        self, *, archive: Path | None = None, options: CallOptions | None = None
+    ) -> ResultEnvelope:
+        """Explicitly prepare the pinned dependency, without a file backend or cloud bootstrap."""
+
+        def execute(selected: CallOptions, metadata: dict[str, Any]) -> Mapping[str, Any]:
+            if archive is not None:
+                require_path(archive, "archive")
+            config = self._configuration(selected, metadata)
+            return composition.prepare_rclone(
+                config.rclone_path,
+                explicit=config.rclone_path_explicit,
+                archive=archive,
+                dry_run=selected.dry_run,
+                environment=self._environment,
+                timeout_seconds=(
+                    selected.timeout_seconds
+                    if selected.timeout_seconds is not None
+                    else config.timeout_seconds
+                ),
+            )
+
+        return self._invoke("setup", options, execute)
+
+    def doctor(self, *, live: bool = False, options: CallOptions | None = None) -> ResultEnvelope:
+        """Own live intent admission before configuration and execute the real diagnostic owner."""
+
+        def execute(selected: CallOptions, metadata: dict[str, Any]) -> ResultEnvelope:
+            require_bool(live, "live")
+            if live and not selected.yes:
+                raise MailCloudError(
+                    ErrorPayload(
+                        ErrorKind.CONFIRMATION_REQUIRED,
+                        "doctor --live requires --yes before it can create generated /TEST objects",
+                    )
+                )
+            if live and selected.dry_run:
+                raise invalid_argument("dry_run")
+            config, backend, timeout = self._compose(selected, metadata)
+            commands = DoctorCommands(
+                backend,
+                config,
+                timeout_seconds=timeout,
+                retries=selected.retries if selected.retries is not None else config.retries,
+                opener=self._http_opener,
+            )
+            report = commands.live() if live else commands.read_only()
+            return ResultEnvelope.success(
+                "doctor", report.result, warnings=report.warnings, **metadata
+            )
+
+        return self._invoke("doctor", options, execute)
+
+    def batch(self, document: object, *, options: CallOptions | None = None) -> ResultEnvelope:
+        """Validate a JSON-shaped document before configuration; never trust a caller's plan."""
+        return self._invoke(
+            "batch",
+            options,
+            lambda selected, metadata: self._execute_batch(
+                parse_batch_document(document), selected, metadata
+            ),
+        )
+
+    def batch_file(self, path: Path, *, options: CallOptions | None = None) -> ResultEnvelope:
+        """Parse one UTF-8 JSON file through the same execution path as a document."""
+
+        def execute(selected: CallOptions, metadata: dict[str, Any]) -> ResultEnvelope:
+            require_path(path, "path")
+            return self._execute_batch(parse_batch_file(path), selected, metadata)
+
+        return self._invoke("batch", options, execute)
+
+    def _execute_batch(
+        self, plan: BatchPlan, selected: CallOptions, metadata: dict[str, Any]
+    ) -> ResultEnvelope:
+        config, backend, timeout = self._compose(selected, metadata)
+        execution = BatchCommands(
+            backend,
+            config,
+            timeout_seconds=timeout,
+            read_retries=selected.retries if selected.retries is not None else config.retries,
+        ).run(plan, dry_run=selected.dry_run, yes=selected.yes, explicit_retries=selected.retries)
+        if execution.is_partial:
+            return ResultEnvelope.batch_partial(execution.items, **metadata)
+        return ResultEnvelope.success("batch", execution.result, **metadata)
 
     def ls(
         self,
@@ -254,8 +350,7 @@ class MailCloudApplication:
     def _compose(
         self, selected: CallOptions, metadata: dict[str, Any]
     ) -> tuple[ResolvedConfig, Backend, int]:
-        config = self._config_loader(selected.config, environment=self._environment)
-        metadata.update(profile=config.profile, remote=config.remote)
+        config = self._configuration(selected, metadata)
         backend = self._backend_factory(config, environment=self._environment)
         timeout = (
             selected.timeout_seconds
@@ -263,6 +358,11 @@ class MailCloudApplication:
             else config.timeout_seconds
         )
         return config, backend, timeout
+
+    def _configuration(self, selected: CallOptions, metadata: dict[str, Any]) -> ResolvedConfig:
+        config = self._config_loader(selected.config, environment=self._environment)
+        metadata.update(profile=config.profile, remote=config.remote)
+        return config
 
     def _read(
         self,
@@ -301,19 +401,29 @@ class MailCloudApplication:
         self,
         operation: str,
         options: CallOptions | None,
-        action: Callable[[CallOptions, dict[str, Any]], Mapping[str, Any]],
+        action: Callable[[CallOptions, dict[str, Any]], Mapping[str, Any] | ResultEnvelope],
     ) -> ResultEnvelope:
         metadata: dict[str, Any] = {}
         try:
             selected = validate_options(options)
             metadata["trace_id"] = selected.trace_id
-            metadata["profile"] = resolve_profile_name(
-                selected.config, environment=self._environment
-            )
+            try:
+                metadata["profile"] = resolve_profile_name(
+                    selected.config, environment=self._environment
+                )
+            except MailCloudError:
+                # System admission and batch parsing precede configuration.
+                # The actual resolver still rejects this profile for admitted input.
+                if operation not in {"batch", "doctor", "setup"}:
+                    raise
             if operation != "version":
                 metadata["remote"] = selected.config.remote
             result = action(selected, metadata)
-            envelope = ResultEnvelope.success(operation, result, **metadata)
+            envelope = (
+                result
+                if isinstance(result, ResultEnvelope)
+                else ResultEnvelope.success(operation, result, **metadata)
+            )
         except MailCloudError as exc:
             envelope = ResultEnvelope.failure(operation, exc.error, **metadata)
         except Exception:

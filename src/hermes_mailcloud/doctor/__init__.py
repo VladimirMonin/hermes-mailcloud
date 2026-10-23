@@ -150,7 +150,7 @@ class DoctorCommands:
         return DoctorReport(self._result("read_only", checks), tuple(warnings))
 
     def live(self) -> DoctorReport:
-        """Run generated `/TEST` probes only after the CLI has confirmed live intent."""
+        """Internal probe executor; supported adapters must use application live admission."""
         read_only = self.read_only()
         result = dict(read_only.result)
         base_checks = result["checks"]

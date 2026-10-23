@@ -11,24 +11,26 @@ immutable release wheel `v0.1.0`. Одинаковое значение верс
 [`application/contracts.py`](../src/hermes_mailcloud/application/contracts.py),
 не отдельная HTTP/JSON-схема или реестр команд.
 
-Поддерживаемый вход `hermes_mailcloud.application` предоставляет одиннадцать методов
-`MailCloudApplication`: `version`, `ls`, `stat`, `mkdir`, `upload`, `download`,
-`mv`, `cp`, `rm`, `publish`, `link`. Это синхронные вызовы в процессе потребителя;
-HTTP-сервера, GUI/MCP, общей живой сессии или фоновых jobs нет. CLI handlers этих
-команд только переводят аргументы, вызывают API, выводят envelope и применяют exit:
+Поддерживаемый вход `hermes_mailcloud.application` предоставляет пятнадцать методов
+`MailCloudApplication`: `version`, `setup`, `doctor`, `ls`, `stat`, `mkdir`, `upload`,
+`download`, `mv`, `cp`, `rm`, `publish`, `link`, `batch`, `batch_file`. Это синхронные
+вызовы в процессе потребителя; HTTP-сервера, GUI/MCP, общей живой сессии или фоновых
+jobs нет. Все shipped CLI handlers переводят аргументы, вызывают API, выводят
+существующий envelope и применяют exit:
 
 ```text
-Python consumer ──────────────┐
-CLI version/read/file/public ─┴→ MailCloudApplication → config/composition
-                                → existing commands + policy/journal + runner/parser
-                                → safe ResultEnvelope → consumer/output adapter
+Python consumer ───┐
+CLI handlers ──────┴→ MailCloudApplication → config/composition
+                       → commands / batch / doctor / installer + existing infrastructure
+                       → safe ResultEnvelope → consumer/output adapter
 ```
 
 Стрелки обозначают вызов и передачу результата, не линейную цепочку imports.
-`setup`, `doctor` и `batch` пока сохраняют прежнюю CLI-оркестрацию; Python-методов
-`setup`, `doctor`, `batch`, `batch_file` нет. Для перенесённых команд legacy fallback
-не остаётся. Внутренние command services не объявляются вторым публичным SDK.
-Оставшийся переход — в [предлагаемом плане](plans/command-first-refactor.md).
+CLI `batch <file>` вызывает `batch_file(Path)`; Python consumer может передать уже
+декодированный документ в `batch(document)`. Внутренние services и сохранившиеся
+private transitional CLI helpers не являются вторым публичным SDK или fallback.
+Очистка migration glue/двойных test drivers и итоговая qualification поставки
+остаются в [предлагаемом плане](plans/command-first-refactor.md).
 
 Пример для Python-окружения с этим source-built пакетом и выбранным подключением:
 
@@ -67,6 +69,37 @@ cloud-эффекту: нет retry, unlink или автоматического
 [модель безопасности](05-safety-model.md) и
 [ошибка после public operation](08-configuration-and-secrets.md#failure-after-a-public-operation).
 
+### Setup, doctor и два batch-входа
+
+- `setup(*, archive=None, options=None)` принимает `Path` для заданного архива и
+  вызывает настоящий pinned installer с environment snapshot экземпляра. File backend
+  и configured cloud remote не нужны. Config разрешается обычным resolver-ом;
+  никакой другой метод не вызывает setup скрыто. Dry-run не скачивает/не исполняет
+  rclone и не создаёт managed files. Параметр retries не добавляет повтор установки.
+- `doctor(*, live=False, options=None)` принимает genuine boolean. Live без yes —
+  confirmation_required/9; затем live+yes+dry-run — invalid_arguments/2. Оба отказа
+  предшествуют config/backend, в том числе при неверном env profile. Read-only doctor
+  с dry-run продолжает чтения; успешный report с отрицательными checks не означает
+  readiness. Live использует существующие probes/HTTP/cleanup и warnings; публичного
+  trusted invocation или custom test-root параметра нет.
+- `batch(document)` и `batch_file(path: Path)` сначала используют настоящий JSON-shaped/
+  UTF-8 parser, затем одну composition на весь пакет. Caller-supplied `BatchPlan`
+  не является разрешённым обходом parsing. Исполнение координирует `BatchCommands`,
+  а не рекурсивные вызовы façade с новым config на item. Оба входа возвращают
+  `operation="batch"`. Плохой input не скрывается ошибкой profile metadata; admitted
+  input всё равно получает ошибку настоящего resolver-а при неверном профиле.
+
+Batch сохраняет defaults плана (omitted overwrite — `never`, не profile default),
+outer yes для любого write, read retry budget и полный preflight до backend. All-item
+dry-run, включая reads, выдаёт планы без backend/temp/journal mutations. Реальный
+public preflight может подготовить private directory/lock до позднего отказа.
+Partial batch возвращает `ok=false`, result со `status=partial_failure`, ordered items
+и exit 11 **без top-level error**. Total считает выполненные попытки, а не исходную
+длину плана после stop. Ordinary unexpected item exception становится fixed safe
+unknown item error и сохраняет прежние outcomes/stop-or-continue; `BaseException`
+не превращается в обычный исход. Ни транзакции, ни автоматического replay нет.
+Parser/schema ограничения описаны в [контракте batch](02-command-contract.md#20-команда-batch-).
+
 API сам ничего не печатает и не требует Typer/Click/Rich. Он возвращает существующий
 `ResultEnvelope`: `operation`, result либо typed error, прежний exit code и
 санитизированные прямые данные, а не только безопасный `to_json()`. Ожидаемые ошибки
@@ -75,9 +108,10 @@ exception content и обещания отсутствия эффекта. Ош�
 keyword остаётся `TypeError`; `BaseException` не превращается в успех.
 
 Конструктор только копирует environment и сохраняет доверенные зависимости.
-`version` не читает config и не создаёт backend. На каждом read/file/public-вызове
-config и runner собираются заново; изменения файла настроек видны следующему вызову,
-изменения environment — новому экземпляру. Последний результат/runner не кешируются.
+`version` не читает config и не создаёт backend. Config и нужный runner собираются
+заново на вызов; batch использует их один раз на пакет, setup не создаёт file runner.
+Изменения файла настроек видны следующему вызову, изменения environment — новому
+экземпляру. Последний результат/runner не кешируются.
 DI — seam доверенного хоста, не sandbox; `Path.home()`/`expanduser()` могут учитывать
 process home, поэтому передача environment не заменяет раннюю изоляцию теста.
 
@@ -85,13 +119,17 @@ process home, поэтому передача environment не заменяет 
 `yes=False`, `timeout_seconds=None` и `retries=None`. `None` означает отсутствие
 runtime override, а `retries=0` — явный нулевой бюджет. Нужны настоящие boolean и
 целые timeout/retries без bool/float/строк; неверные типы отклоняются до config.
-Типы путей операции — строки; `overwrite` — `None`, `never`, `always` или `if-newer`,
+Remote/local file-operation paths — строки; `archive` и `batch_file.path` — `Path`.
+`overwrite` — `None`, `never`, `always` или `if-newer`,
 без неявного coercion. Нормализация, policy, parser и безопасные read retries
 остаются у существующих owners. `ls` принимает `recursive`, `files_only`,
 `dirs_only`; file/directory `stat` сохраняет доступные metadata/hashes.
-`dry_run=True` не отменяет standalone read-вызов backend. Для writes profile read
-retries не наследуются: default равен нулю; explicit positive budget отклоняется
-даже для dry-run. Timeout относится к одному backend invocation, не ко всему publish.
+`dry_run=True` не отменяет standalone read-вызов backend. Для восьми standalone
+file/public writes profile read retries не наследуются: default равен нулю; explicit
+positive budget отклоняется даже для dry-run. В write-batch он тоже запрещён;
+read-only batch и safe doctor reads/readbacks используют read budget. Timeout
+относится к одному backend invocation, не ко всему publish/batch/doctor; installer
+сохраняет собственный общий deadline.
 
 `ConfigOverrides` — нейтральное имя прежних profile/remote/config_path overrides;
 `CliConfigOverrides` остаётся совместимым alias. Precedence и отдельный

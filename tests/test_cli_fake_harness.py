@@ -217,6 +217,10 @@ def test_isolated_environment_is_explicit_and_secret_free(tmp_path: Path) -> Non
         "LOCALAPPDATA",
         "TEMP",
         "TMP",
+        "TMPDIR",
+        "RCLONE_CONFIG",
+        "PYTHONDONTWRITEBYTECODE",
+        "PYTEST_DISABLE_PLUGIN_AUTOLOAD",
         "PYTHONUTF8",
         "PYTHONIOENCODING",
         "PYTHONPATH",
@@ -224,7 +228,14 @@ def test_isolated_environment_is_explicit_and_secret_free(tmp_path: Path) -> Non
     if os.name == "nt":
         expected.add("SystemRoot")
     assert set(environment) == expected
-    assert not any(key.startswith(("HMC_", "RCLONE_")) for key in environment)
+    assert not any(
+        key.startswith("HMC_") or (key.startswith("RCLONE_") and key != "RCLONE_CONFIG")
+        for key in environment
+    )
+    assert Path(environment["RCLONE_CONFIG"]).is_relative_to(tmp_path)
+    assert Path(environment["RCLONE_CONFIG"]).read_bytes() == b""
+    assert environment["PYTHONDONTWRITEBYTECODE"] == "1"
+    assert environment["PYTEST_DISABLE_PLUGIN_AUTOLOAD"] == "1"
     assert "HTTP_PROXY" not in environment
     for key in (
         "HOME",
@@ -234,6 +245,7 @@ def test_isolated_environment_is_explicit_and_secret_free(tmp_path: Path) -> Non
         "LOCALAPPDATA",
         "TEMP",
         "TMP",
+        "TMPDIR",
         "PATH",
     ):
         assert environment[key].startswith(str(tmp_path))

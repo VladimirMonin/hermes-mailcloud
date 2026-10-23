@@ -15,7 +15,9 @@ import importlib.util
 import io
 import json
 import os
+import stat
 import sys
+import zipfile
 from pathlib import Path
 
 PUBLIC_URL = "https://cloud.mail.ru/public/installed-wheel-synthetic-capability/path"
@@ -39,6 +41,10 @@ _API_COMPONENTS = (
     "hermes_mailcloud.commands.move_copy",
     "hermes_mailcloud.commands.remove",
     "hermes_mailcloud.journal",
+    "hermes_mailcloud.batch",
+    "hermes_mailcloud.doctor",
+    "hermes_mailcloud.rclone.install",
+    "hermes_mailcloud.probes.core",
 )
 _COMPONENTS = (*_API_COMPONENTS, "hermes_mailcloud.cli", "hermes_mailcloud.batch")
 
@@ -113,11 +119,24 @@ def installed_provenance(control: dict, *, api_only: bool = False) -> dict:
         ("MkdirCommand", "hermes_mailcloud.commands.mkdir"),
         ("MoveCopyCommands", "hermes_mailcloud.commands.move_copy"),
         ("RemoveCommand", "hermes_mailcloud.commands.remove"),
+        ("BatchCommands", "hermes_mailcloud.batch"),
+        ("DoctorCommands", "hermes_mailcloud.doctor"),
     ):
         require(
             getattr(service, name) is getattr(importlib.import_module(module), name),
             "application write-service substitution",
         )
+    batch = importlib.import_module("hermes_mailcloud.batch")
+    require(
+        service.parse_batch_document is batch.parse_batch_document
+        and service.parse_batch_file is batch.parse_batch_file,
+        "application batch-parser substitution",
+    )
+    require(
+        composition.prepare_rclone
+        is importlib.import_module("hermes_mailcloud.rclone.install").prepare_rclone,
+        "application installer substitution",
+    )
     journal = importlib.import_module("hermes_mailcloud.journal")
     require(
         importlib.import_module("hermes_mailcloud.commands.public").LinkJournal
@@ -194,7 +213,17 @@ def backend(control: dict, arguments: list[str]) -> int:
     if not arguments:
         return 97
     command, *values = arguments
-    if command == "lsjson":
+    if command == "version":
+        print("rclone v1.75.2")
+    elif command == "listremotes":
+        print("fake:")
+    elif command == "about":
+        print("{}")
+    elif command == "lsd":
+        if values and "/TEST/hermes-mailcloud-" in values[0]:
+            sys.stderr.write("directory not found")
+            return 3
+    elif command == "lsjson":
         item = {
             "Path": "report.txt",
             "Name": "report.txt",
@@ -205,10 +234,16 @@ def backend(control: dict, arguments: list[str]) -> int:
         print(json.dumps(item if "--stat" in values else [item]))
     elif command == "copyto":
         if len(values) >= 2 and Path(values[1]).is_absolute():
-            Path(values[1]).write_bytes(b"downloaded-wheel")
+            if "/TEST/hermes-mailcloud-" in values[0]:
+                Path(values[1]).write_text("hermes-mailcloud probe\n", encoding="utf-8")
+            else:
+                Path(values[1]).write_bytes(b"downloaded-wheel")
     elif command == "link":
+        if values and values[0] == "--unlink":
+            sys.stderr.write("backend operation not supported")
+            return 1
         print(PUBLIC_URL)
-    elif command not in {"mkdir", "moveto", "deletefile", "purge"}:
+    elif command not in {"mkdir", "moveto", "deletefile", "purge", "rmdir"}:
         return 97
     return 0
 
@@ -216,7 +251,16 @@ def backend(control: dict, arguments: list[str]) -> int:
 def executable_runner(control_path: Path, **kwargs):
     from hermes_mailcloud.rclone.runner import RcloneRunner
 
-    return RcloneRunner(
+    class ExecutionEdge(RcloneRunner):
+        def run(self, args, *, timeout_seconds=None):
+            if "fake:/TEST/installed-api/unexpected" in args:
+                control = json.loads(control_path.read_text(encoding="utf-8"))
+                with Path(control["log"]).open("a", encoding="utf-8") as output:
+                    output.write(json.dumps(list(args)) + "\n")
+                raise RuntimeError(DIAGNOSTIC)
+            return super().run(args, timeout_seconds=timeout_seconds)
+
+    return ExecutionEdge(
         (
             sys.executable,
             "-I",
@@ -247,6 +291,94 @@ def cli_run(control: dict, control_path: Path, arguments: list[str]) -> None:
         Path(control["provenance"]).write_text(
             json.dumps(installed_provenance(control)), encoding="utf-8"
         )
+
+
+def setup_fixture(control: dict):
+    """Actual installed installer with only synthetic pins and executable execution."""
+    from hermes_mailcloud.application import MailCloudApplication
+    from hermes_mailcloud.rclone import install
+    from hermes_mailcloud.rclone.runner import RcloneResult, RcloneRunner
+
+    root = Path(control["api_source"]).parent / "setup-fixture"
+    root.mkdir()
+    version, system = "v1.75.2", "windows" if os.name == "nt" else "linux"
+    executable = b"synthetic executable; never execute fixture bytes\n"
+    member = f"rclone-{version}-{system}-amd64/" + ("rclone.exe" if os.name == "nt" else "rclone")
+    stream = io.BytesIO()
+    with zipfile.ZipFile(stream, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        info = zipfile.ZipInfo(member)
+        info.create_system = 3
+        info.external_attr = (stat.S_IFREG | 0o600) << 16
+        archive.writestr(info, executable)
+    payload = stream.getvalue()
+    release = install.Release(
+        version=version,
+        system=system,
+        architecture="amd64",
+        url=f"https://downloads.rclone.org/{version}/rclone-{version}-{system}-amd64.zip",
+        archive_sha256=hashlib.sha256(payload).hexdigest(),
+        archive_bytes=len(payload),
+        executable_sha256=hashlib.sha256(executable).hexdigest(),
+        executable_bytes=len(executable),
+        member=member,
+    )
+    archive = root / "pinned.zip"
+    archive.write_bytes(payload)
+    environment = dict(os.environ)
+    environment.pop("HMC_RCLONE_PATH", None)
+    config = root / "config.toml"
+    config.write_text("[profiles.default]\n", encoding="utf-8")
+    environment["HMC_CONFIG"] = str(config)
+    for name, child in (
+        ("HOME", "home"),
+        ("USERPROFILE", "home"),
+        ("XDG_DATA_HOME", "data"),
+        ("LOCALAPPDATA", "local"),
+        ("PATH", "empty-path"),
+    ):
+        directory = root / child
+        directory.mkdir(exist_ok=True)
+        environment[name] = str(directory)
+    target = install.managed_data_root(environment)
+    require(
+        target.is_relative_to(root) and not target.exists(), "setup destination is not fresh/owned"
+    )
+    checks = []
+
+    class VersionEdge(RcloneRunner):
+        def run(self, args, *, timeout_seconds=None):
+            require(
+                args[-1] == "version" and Path(args[1]).read_bytes() == b"",
+                "unsafe setup verification",
+            )
+            checks.append(True)
+            return RcloneResult(0, f"rclone {version}\n", "", 0)
+
+    original_pin, original_runner = install.pinned_release, install.RcloneRunner
+    try:
+        install.pinned_release, install.RcloneRunner = lambda: release, VersionEdge
+        app = MailCloudApplication(environment=environment)
+        installed, available = app.setup(archive=archive), app.setup(archive=archive)
+        active = Path(install.managed_rclone_path(environment))
+        require(
+            installed.ok and available.ok and active.is_relative_to(target),
+            "setup activation failed",
+        )
+        require(
+            active.read_bytes() == executable and len(checks) == 1,
+            "setup verified/active bytes differ",
+        )
+    finally:
+        install.pinned_release, install.RcloneRunner = original_pin, original_runner
+    return (
+        installed,
+        available,
+        {
+            "setup_active_bytes_match": True,
+            "setup_version_execution_calls": len(checks),
+            "setup_destination_owned": True,
+        },
+    )
 
 
 def api_run(control: dict, control_path: Path) -> None:
@@ -324,7 +456,149 @@ def api_run(control: dict, control_path: Path) -> None:
             all(row["public_url"] == PUBLIC_URL for row in records),
             "API journal capability mismatch",
         )
+        call_groups = {}
+
+        def observed(name, action):
+            log = Path(control["log"])
+            before = log.read_text(encoding="utf-8").splitlines()
+            result = action()
+            call_groups[name] = [
+                json.loads(line)
+                for line in log.read_text(encoding="utf-8").splitlines()[len(before) :]
+            ]
+            return result
+
+        results["setup-dry"] = observed(
+            "setup-dry", lambda: application.setup(options=CallOptions(dry_run=True))
+        )
+        before_setup = Path(control["log"]).read_bytes()
+        results["setup-install"], results["setup-available"], setup_resources = setup_fixture(
+            control
+        )
+        require(Path(control["log"]).read_bytes() == before_setup, "setup invoked a file backend")
+        results["doctor"] = observed("doctor", application.doctor)
+        results["doctor-confirmation"] = observed(
+            "doctor-confirmation", lambda: application.doctor(live=True)
+        )
+        results["doctor-live-dry"] = observed(
+            "doctor-live-dry",
+            lambda: application.doctor(live=True, options=CallOptions(yes=True, dry_run=True)),
+        )
+
+        class Response:
+            headers = {"Content-Type": "text/html"}
+
+            def __init__(self, status):
+                self.status = status
+
+            def read(self, size):
+                return b"x" * size
+
+            def close(self):
+                pass
+
+        class Opener:
+            def __init__(self):
+                self.statuses = iter([200, 200, 404, 200, 200, 404])
+                self.calls = 0
+
+            def open(self, request, *, timeout):
+                self.calls += 1
+                return Response(next(self.statuses))
+
+        opener = Opener()
+        results["doctor-live"] = observed(
+            "doctor-live",
+            lambda: MailCloudApplication(http_opener=opener).doctor(
+                live=True, options=CallOptions(yes=True)
+            ),
+        )
+        batch_destination = destination.with_name("batch-document.bin")
+        batch_document = {
+            "version": 1.0,
+            "operations": [
+                {"op": "mkdir", "remote_path": "/TEST/installed-api/batch"},
+                {
+                    "op": "download",
+                    "remote_path": "/TEST/installed-api/file.txt",
+                    "local_path": str(batch_destination),
+                },
+            ],
+        }
+        results["batch-document"] = observed(
+            "batch-document",
+            lambda: application.batch(batch_document, options=CallOptions(yes=True)),
+        )
+        batch_file = destination.with_name("batch-file.json")
+        batch_file_destination = destination.with_name("batch-file.bin")
+        batch_document["operations"][1]["local_path"] = str(batch_file_destination)
+        batch_file.write_text(json.dumps(batch_document), encoding="utf-8")
+        results["batch-file"] = observed(
+            "batch-file", lambda: application.batch_file(batch_file, options=CallOptions(yes=True))
+        )
+        results["batch-dry"] = observed(
+            "batch-dry",
+            lambda: application.batch(
+                {
+                    "version": 1,
+                    "operations": [
+                        {"op": "ls", "remote_path": "/TEST"},
+                        {"op": "mkdir", "remote_path": "/TEST/installed-api/dry"},
+                    ],
+                },
+                options=CallOptions(dry_run=True),
+            ),
+        )
+        for continuation in (False, True):
+            plan = {
+                "version": 1,
+                "defaults": {"continue_on_error": continuation},
+                "operations": [
+                    {"op": "mkdir", "remote_path": "/TEST/installed-api/first"},
+                    {"op": "mkdir", "remote_path": "/Hermes/private/api-failure"},
+                    {"op": "mkdir", "remote_path": "/TEST/installed-api/third"},
+                ],
+            }
+            results["batch-partial-" + str(continuation)] = observed(
+                "batch-partial-" + str(continuation),
+                lambda plan=plan: application.batch(plan, options=CallOptions(yes=True)),
+            )
+        results["batch-unexpected"] = observed(
+            "batch-unexpected",
+            lambda: application.batch(
+                {
+                    "version": 1,
+                    "operations": [
+                        {"op": "mkdir", "remote_path": "/TEST/installed-api/first"},
+                        {"op": "mkdir", "remote_path": "/TEST/installed-api/unexpected"},
+                    ],
+                },
+                options=CallOptions(yes=True),
+            ),
+        )
+        results["batch-null"] = observed(
+            "batch-null",
+            lambda: application.batch(
+                {
+                    "version": 1,
+                    "defaults": None,
+                    "operations": [{"op": "ls", "remote_path": "/TEST"}],
+                }
+            ),
+        )
+        bad_utf8 = destination.with_name("invalid-utf8.json")
+        bad_utf8.write_bytes(b"\xff")
+        results["batch-utf8"] = observed("batch-utf8", lambda: application.batch_file(bad_utf8))
+        require(
+            batch_destination.read_bytes()
+            == batch_file_destination.read_bytes()
+            == b"downloaded-wheel",
+            "batch download readback failed",
+        )
         resources = {
+            **setup_resources,
+            "doctor_http_calls": opener.calls,
+            "batch_download_bytes_equal": True,
             "download_bytes": destination.stat().st_size,
             "download_sha256": hashlib.sha256(destination.read_bytes()).hexdigest(),
             "source_preserved": source.read_bytes() == b"installed API source",
@@ -354,6 +628,7 @@ def api_run(control: dict, control_path: Path) -> None:
                 "cli_sdk_imported": False,
                 "application_output": False,
                 "resources": resources,
+                "call_groups": call_groups,
             }
         )
     )

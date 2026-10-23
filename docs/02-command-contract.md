@@ -139,12 +139,12 @@ packaged pins, не произвольный URL. `--dry-run` не скачив�
 
 ## 3.3. Внутренний Python-вход
 
-В текущих исходниках CLI `version`, `ls`, `stat`, `mkdir`, `upload`, `download`,
-`mv`, `cp`, `rm`, `publish` и `link` делегируют
+В текущих исходниках все shipped CLI handlers делегируют
 `hermes_mailcloud.application.MailCloudApplication`. Прямые вызовы возвращают тот
-же безопасный `ResultEnvelope`, а не запускают CLI или HTTP-сервер. Поддерживаются
-только эти одиннадцать методов; `setup`, `doctor`, `batch` и `batch_file` пока не
-входят в Python API, а соответствующие CLI-команды сохраняют прежнюю оркестрацию.
+же безопасный `ResultEnvelope`, а не запускают CLI или HTTP-сервер. Пятнадцать
+реальных методов включают `setup`, `doctor`, `batch(document)` и `batch_file(Path)`
+наряду с version/read/file/public операциями. CLI `batch <file>` использует
+`batch_file`; оба Python batch-входа возвращают `operation="batch"`.
 File/public defaults и guards одинаковы для прямого вызова и CLI: write retries
 по умолчанию равны нулю, положительный explicit budget отклоняется даже в dry-run;
 `rm`/`publish` требуют подтверждения для реального выполнения, standalone `link` —
@@ -273,6 +273,14 @@ config or backend access. A live run allocates fresh
 generated `/TEST/hermes-mailcloud-*` roots only after read-only readiness passes,
 records those roots, and cleans up only same-run objects. Existing objects outside
 `/TEST` remain metadata/list-only.
+
+В текущих source-built пакетах application проверяет genuine boolean/options,
+затем live без yes отклоняет как confirmation_required/9; сочетание live+yes+
+dry-run — как invalid_arguments/2. Отказы происходят до config/backend и не
+маскируются ошибкой env profile metadata. Read-only doctor с dry-run продолжает
+документированные чтения; это не zero-backend план. Успешный diagnostic report
+с отрицательными checks не доказывает readiness. Старый pinned release asset не
+получает этот admission только от совпадения версии пакета.
 
 ### JSON успеха: read-only mode
 
@@ -843,6 +851,23 @@ attempted operation outputs live at `result.items` in input order. A partial
 execution returns process exit `11` with `ok: false`, `result.status:
 "partial_failure"`, and no top-level `error`; each item has exactly one of its own
 `result` or `error`.
+
+Для текущего source-built Python API оба inputs используют настоящий parser до
+configuration и один execution path с config/runner на пакет. Нельзя передать
+«доверенный» `BatchPlan` вместо JSON-shaped документа. Schema и parser принимают
+version 1 или конечное integer-valued 1.0, но не bool/string/nonfinite; omitted
+`defaults` использует defaults, explicit null запрещён. Invalid UTF-8 в file input
+даёт безопасный invalid_arguments/2. Неверный input/ранний отказ не маскируется
+ошибкой выбора profile metadata; admitted input проверяется настоящим resolver-ом.
+
+Plan overwrite по умолчанию `never`, не profile default; read-only items используют
+read budget. Положительный explicit retries запрещён для write-batch даже в dry-run,
+записи автоматически не повторяются. До первого backend вызова проверены все items;
+real public preflight может подготовить private directory/lock, dry-run — нет.
+`total` — число попыток после stop, не длина исходного плана. Ordinary unexpected
+execution exception становится fixed safe unknown item error с прежними ordered
+outcomes и stop/continue; BaseException не маскируется обычным результатом. Batch
+не предоставляет транзакции, rollback или автоматического replay.
 
 ### JSON успеха
 

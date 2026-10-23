@@ -90,10 +90,11 @@ After the development sync, build wheel and sdist and run the portable harness
 with the selected development interpreter. It creates a new runtime and cwd
 outside the checkout, installs only locked runtime dependencies and the wheel,
 checks import provenance, then exercises the real launcher without injection,
-fake-backed file/public/batch CLI scenarios, and a separate direct version/read/
-file/public API process with CLI SDK imports blocked before product imports.
-The API checks include file/journal readback, dry-run and safety refusals. No Mail.ru
-credentials or live probe are used; `doctor --json` remains read-only. Missing
+fake-backed CLI scenarios, and a separate direct application process with CLI SDK
+imports blocked before product imports. API checks include file/journal readback,
+synthetic pinned setup activation, doctor admission and fake-live probe/HTTP cleanup,
+both batch inputs, partial outcomes, dry-run and safety refusals. No real Mail.ru
+credentials or live cloud probe are used; uninjected `doctor --json` remains read-only. Missing
 build/runtime dependencies may be resolved through package indexes.
 
 ```console
@@ -129,23 +130,25 @@ roots and leaves existing cloud data metadata/list-only.
 ## Architecture
 
 ```
-Hermes Agent → hermes-mailcloud CLI → policy + JSON contract → rclone subprocess → Mail.ru Cloud
+CLI / Python consumer → MailCloudApplication → services + policy → rclone subprocess → Mail.ru Cloud
 ```
 
 Current source-built packages also expose a synchronous, in-process Python entry:
-`hermes_mailcloud.application.MailCloudApplication`, with **`version`, `ls`,
-`stat`, `mkdir`, `upload`, `download`, `mv`, `cp`, `rm`, `publish` and `link`**.
-These CLI handlers use the same application owner; `setup`, `doctor` and `batch`
-retain their existing CLI path and are not yet Python API methods. This is an
-internal callable boundary, not an HTTP service. It returns a safe typed envelope
-without printing or requiring Typer/Click/Rich. File/public calls preserve the
-existing confirmation, overwrite, private-journal and no-write-retry policies.
+`hermes_mailcloud.application.MailCloudApplication`, with **`version`, `setup`,
+`doctor`, `ls`, `stat`, `mkdir`, `upload`, `download`, `mv`, `cp`, `rm`, `publish`,
+`link`, `batch(document)` and `batch_file(Path)`**. All shipped CLI handlers use
+that same application owner. This is an internal callable boundary, not an HTTP
+service. It returns a safe typed envelope without printing or requiring
+Typer/Click/Rich. Existing confirmation, overwrite, private-journal and no-write-retry
+policies remain. Doctor live admission precedes configuration; both batch inputs
+retain ordered partial outcomes and exit 11, without a top-level error.
 See the [application interface and example](docs/01-architecture.md#current-in-process-application-interface).
 
 The immutable `v0.1.0` release wheel above predates this boundary; the unchanged
-package version alone does not identify a source-built candidate. The remaining
-migration is [proposed separately](docs/plans/command-first-refactor.md), not an
-already available API. Historical architecture options remain in
+package version alone does not identify a source-built candidate. Transitional
+glue cleanup and final delivery qualification remain in the
+[command-first roadmap](docs/plans/command-first-refactor.md); the implemented
+surface is documented above, not inferred from that plan. Historical options remain in
 [`docs/01-architecture.md`](docs/01-architecture.md) and
 [`docs/03-development-plan.md`](docs/03-development-plan.md).
 

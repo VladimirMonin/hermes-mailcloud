@@ -34,9 +34,19 @@ Write dry-run возвращает meaningful plan без backend/temp/journal m
 остаётся только в private journal, прямой результат содержит fingerprint либо
 безопасную ошибку. Правила native storage не ослабляются для Python consumer.
 
-`setup`, `doctor` и `batch` пока сохраняют CLI-путь; нового публичного Python-входа
-для них нет. Разрешение на тесты в `/TEST` не разрешает публикацию в `/Hermes/public`
-или обход фиксированного public root.
+`setup`, `doctor`, `batch(document)` и `batch_file(Path)` также проходят application.
+Setup — только явная подготовка зависимости, без cloud configuration/скрытого
+bootstrap. Для doctor `live` — genuine boolean: без yes возвращается confirmation/9,
+при live+yes+dry-run — invalid_arguments/2, до config/backend. Read-only dry-run
+остаётся чтением, не планом. Публичного входа «доверенный live-запрос» или custom
+probe root нет; `yes` не является authentication.
+
+Оба batch inputs проходят parser до config, затем общий preflight всех items.
+Любой write требует outer yes; all-item dry-run не вызывает backend/journal/temp.
+Реальный preflight может подготовить private journal directory/lock. Batch не
+транзакция: ordinary unexpected item error сохраняет прежние результаты и stop/
+continue policy, а не вызывает replay всего пакета или rollback. Разрешение на
+тесты в `/TEST` не разрешает публикацию в `/Hermes/public` или обход public root.
 
 ## 1. Цель модели безопасности 🧭
 

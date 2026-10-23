@@ -38,6 +38,10 @@ def test_only_implemented_operations_are_public_and_options_are_small_and_frozen
         "rm",
         "publish",
         "link",
+        "setup",
+        "doctor",
+        "batch",
+        "batch_file",
     }
     first, second = CallOptions(), CallOptions()
     assert first.config == ConfigOverrides() and first.config is not second.config
@@ -217,6 +221,13 @@ def test_real_read_api_executes_with_cli_sdk_imports_blocked(tmp_path: Path) -> 
         assert app.version().ok
         read = app.ls('/Hermes')
         assert read.ok and read.result['items'][0]['size'] == 0
+        setup = app.setup(options=CallOptions(dry_run=True))
+        assert setup.ok and setup.result['status'] == 'dry_run'
+        doctor = app.doctor()
+        assert doctor.ok and doctor.result['mode'] == 'read_only'
+        document = {{'version': 1, 'operations': [{{'op': 'ls', 'remote_path': '/Hermes'}}]}}
+        batch = app.batch(document, options=CallOptions(dry_run=True))
+        assert batch.ok and batch.result['items'][0]['result']['dry_run'] is True
         planned = app.mkdir('/TEST/api-plan', options=CallOptions(dry_run=True))
         assert planned.ok and planned.result['dry_run'] is True and planned.result['plan']
         protected = app.rm('/TEST', options=CallOptions(yes=True))

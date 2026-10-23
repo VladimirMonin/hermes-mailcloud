@@ -17,17 +17,22 @@ summary: "Прикладные операции независимо от CLI; �
 представляет результат. Будущие GUI/MCP смогут обращаться к тому же владельцу,
 но не обязаны запускать CLI-процесс и не получают свою копию правил.
 
-До рефакторинга `cli.py` совмещает Typer с разрешением конфигурации, выбором
-command services, retries/timeout, сборкой envelope и admission для live doctor.
-При этом `commands/`, `core/`, `batch/`, `doctor/` и runner уже дают полезные
-переиспользуемые границы. Цель — выделить недостающую прикладную оркестрацию,
-а не переписать проверенные механизмы. Конкретные сигнатуры, файлы и срезы
-определяются [планом command-first-рефакторинга](../plans/command-first-refactor.md)
-до изменения кода; план не описывает уже реализованный API.
+Поддерживаемый `MailCloudApplication` координирует все shipped операции, включая
+явный setup, doctor admission и оба batch inputs. Все CLI handlers переводят ввод
+и представляют его результат. `commands/`, `core/`, `batch/`, `doctor/`, installer,
+probes и runner сохраняют свои механизмы; отдельная оболочка их не переписывает.
+Private transitional helpers не являются запасным маршрутом. Точные сигнатуры и
+реальная поверхность — в [текущей архитектуре](../01-architecture.md#current-in-process-application-interface);
+[план рефакторинга](../plans/command-first-refactor.md) остаётся roadmap, не runtime evidence.
 
 ## Один владелец ответственности
 
 - Прикладной API координирует конфигурацию, операции, defaults, admission и результаты.
+  Конфигурация/runner принадлежат вызову; batch использует одну composition на пакет,
+  setup не создаёт file runner. Constructor/version не выполняют bootstrap.
+- `BatchCommands` — compound use case: общий parser/preflight и ordered execution,
+  не рекурсивный вызов публичного façade на item. Doctor/probes владеют workflow и
+  cleanup; admission live intent принадлежит поддерживаемому application-входу.
 - Предметные инварианты остаются у существующих policy/path/command owners; адаптер
   не может обойти их альтернативным путём.
 - rclone runner исполняет literal argv, ограничивает процессы и переводит ошибки;
@@ -69,8 +74,8 @@ Runtime-валидация не является аутентификацией 
 Структурный import-test полезен, но без runtime-сценария недостаточен.
 Неизменённые платформенные механизмы не переписываются ради новой диаграммы.
 
-Текущая историческая карта: [01-architecture](../01-architecture.md); будущая
-карта не подменяет найденную реализацию. Условия пересмотра — новый потребитель,
+Фактическая поверхность и отдельно помеченная историческая карта — в
+[01-architecture](../01-architecture.md); будущая карта не подменяет реализацию. Условия пересмотра — новый потребитель,
 новая гарантия состояния/выполнения или доказанная стоимость существующей границы.
 
 Связи: [философия](project-philosophy.md), [тесты](../06-testing-strategy.md),

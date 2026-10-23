@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 
 from ..config import ConfigOverrides, ResolvedConfig, resolve_config
+from ..rclone.install import prepare_rclone as prepare_rclone
 from ..rclone.runner import RcloneRunner
 from .contracts import Backend
 

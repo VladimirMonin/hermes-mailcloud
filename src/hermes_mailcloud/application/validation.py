@@ -25,6 +25,11 @@ def require_bool(value: object, field: str) -> None:
         raise invalid_argument(field)
 
 
+def require_path(value: object, field: str) -> None:
+    if not isinstance(value, Path):
+        raise invalid_argument(field)
+
+
 def require_overwrite(value: object) -> None:
     """Validate the callable contract without coercing non-string input."""
     if value is not None and (

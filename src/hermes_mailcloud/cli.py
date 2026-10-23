@@ -18,7 +18,6 @@ from .config import CliConfigOverrides, ResolvedConfig, resolve_config, resolve_
 from .core.errors import ErrorKind, ErrorPayload, MailCloudError
 from .core.result import ResultEnvelope
 from .doctor import DoctorCommands
-from .rclone.install import prepare_rclone
 from .rclone.runner import RcloneRunner
 
 
@@ -155,16 +154,8 @@ def setup(
 ) -> None:
     """Explicitly prepare user-scoped rclone only; never configure a cloud account."""
     options = _options(context)
-    _run_rclone_command(
-        context,
-        "setup",
-        lambda config, _runner: prepare_rclone(
-            config.rclone_path,
-            explicit=config.rclone_path_explicit,
-            archive=archive,
-            dry_run=options.dry_run,
-            timeout_seconds=_effective_timeout(options, config),
-        ),
+    _emit_application_result(
+        MailCloudApplication().setup(archive=archive, options=_call_options(options)), options
     )
 
 
@@ -174,7 +165,10 @@ def doctor(
     live: bool = typer.Option(False, "--live", help="run generated /TEST probes (requires --yes)"),
 ) -> None:
     """Diagnose rclone and remote readiness without cloud mutation by default."""
-    _run_doctor_command(context, live=live)
+    options = _options(context)
+    _emit_application_result(
+        MailCloudApplication().doctor(live=live, options=_call_options(options)), options
+    )
 
 
 @app.command()
@@ -350,7 +344,10 @@ def batch(
     plan_path: Annotated[Path, typer.Argument(help="JSON batch plan path")],
 ) -> None:
     """Run a JSON plan of cloud operations."""
-    _run_batch_command(context, plan_path)
+    options = _options(context)
+    _emit_application_result(
+        MailCloudApplication().batch_file(plan_path, options=_call_options(options)), options
+    )
 
 
 def _placeholder(context: typer.Context, operation: str) -> None:

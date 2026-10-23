@@ -523,3 +523,44 @@ def test_cli_batch_dry_run_validates_without_launching_the_fake_backend(tmp_path
     assert result.stderr == ""
     assert json.loads(result.stdout)["result"]["items"][0]["result"]["dry_run"] is True
     assert harness.recorded_calls() == []
+
+
+def test_source_drift_batch_file_invalid_utf8_is_a_typed_refusal(tmp_path) -> None:
+    path = tmp_path / "invalid-utf8.json"
+    path.write_bytes(b'{"version":1,"description":"\xff"}')
+    with pytest.raises(MailCloudError) as caught:
+        parse_batch_file(path)
+    assert caught.value.error.kind is ErrorKind.INVALID_ARGUMENTS
+    assert "\\xff" not in caught.value.error.message
+
+
+@pytest.mark.parametrize("continuation", [False, True])
+def test_source_drift_unexpected_item_failure_keeps_prior_ordered_results(continuation) -> None:
+    from tests.helpers.application import RecordingBackend as ExecutionEdge
+
+    backend = ExecutionEdge(
+        RcloneResult(0, "", "", 0),
+        RuntimeError("access_token=batch-unexpected-private-sentinel"),
+        RcloneResult(0, "", "", 0),
+    )
+    plan = _plan(
+        {"op": "mkdir", "remote_path": "/TEST/first"},
+        {"op": "mkdir", "remote_path": "/TEST/second"},
+        {"op": "mkdir", "remote_path": "/TEST/third"},
+        continue_on_error=continuation,
+    )
+    execution = BatchCommands(backend, _config(), timeout_seconds=9, read_retries=0).run(
+        plan, yes=True
+    )
+    assert execution.is_partial and len(execution.items) == (3 if continuation else 2)
+    assert execution.items[0]["ok"] is True
+    assert execution.items[0]["result"]["remote_path"] == "/TEST/first"
+    assert execution.items[1]["index"] == 1 and execution.items[1]["ok"] is False
+    assert execution.items[1]["error"]["kind"] == "unknown_error"
+    assert "batch-unexpected-private-sentinel" not in repr(execution)
+    assert len(backend.calls) == (3 if continuation else 2)
+    if continuation:
+        assert (
+            execution.items[2]["index"] == 2
+            and execution.items[2]["result"]["remote_path"] == "/TEST/third"
+        )

@@ -11,9 +11,10 @@
 Проверяем обещанное поведение, а не количество классов или процент покрытия.
 Для command-first-перехода нужны два соединённых пути: прямой вызов настоящего
 прикладного API без Typer и вызов того же владельца через настоящий CLI.
-Текущий поддерживаемый API: `version/ls/stat/mkdir/upload/download/mv/cp/rm/publish/link`;
-его connected проверки находятся в `tests/application/`. System/batch API и
-окончательное удаление migration glue остаются в [полном плане](plans/command-first-refactor.md).
+Текущий поддерживаемый API охватывает все shipped операции, включая `setup`,
+`doctor`, `batch(document)` и `batch_file(Path)`; connected проверки находятся в
+`tests/application/`. Окончательная очистка transitional glue и qualification всей
+поставки остаются в [полном плане](plans/command-first-refactor.md).
 Внешний rclone/облако можно заменять; сам проверяемый прикладной сценарий — нельзя.
 Результаты, коды ошибок, сохранность файла/журнала, отказ до эффекта, отсутствие
 повторной записи и возможность следующей операции важнее одного `mock.called`.
@@ -28,6 +29,19 @@ wheel/launcher нужна для изменённого поставляемог
 независимая приёмка разделяются. NOT_RUN, skip и выполненный отрицательный случай
 имеют разный смысл. Новая правка fixture/serializer/артефакта требует затронутой
 перепроверки; неизменённые доказательства используются только в их исходной области.
+
+System/batch проверки проходят настоящий installer за synthetic pins/download/
+execution seams, version/activation readback и сохранность прежних bytes; setup
+не создаёт file backend и не вызывается скрыто. Для doctor проверяются strict live/
+yes/dry-run admission до loader, read-only checks/warnings и real probes/HTTP/cleanup
+за заменёнными внешними краями. Для обоих batch inputs нужны parser-before-config,
+все discriminators/defaults, однократная composition, all-item dry-run, preflight,
+ordered partial stop/continue и fixed unknown item failure без утраты прежних items.
+BaseException не маскируется обычным result. Parser/schema вместе различают omitted/
+null, integer 1/1.0 против bool/string/nonfinite и invalid UTF-8; ошибочное profile
+metadata не должно перекрывать ранний отказ. Native-text fake download сохраняет
+реальные LF/CRLF bytes источника, а не ослабляет probe assertion. SDK-blocked installed
+API и uninjected launcher проверяются раздельно.
 
 <!-- hmc-json-example-default: non-contract -->
 
