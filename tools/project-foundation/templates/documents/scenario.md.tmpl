@@ -1,0 +1,47 @@
+---
+id: "{{document_id}}"
+title: "{{scenario_title}}"
+kind: scenario
+status: draft
+created: "{{date}}"
+updated: "{{date}}"
+areas: ["{{area}}"]
+summary: "{{actor_result_and_important_failure}}"
+---
+
+> Автору: самостоятельный долговечный сценарий или несколько потребителей/альтернатив. Короткий случай оставить в задаче. Схему адаптировать к реальной последовательности, не объявлять пример найденным поведением. Удалить подсказку и лишние разделы.
+
+## Актор, результат и границы
+
+{{actor_goal_value_scope_non_goals}}
+Исходные данные/состояние/права: {{preconditions}}.
+Основание и статус ожидания: {{requirement_or_proposal_and_reference}}.
+
+## Путь и важный отказ
+
+```mermaid
+flowchart TD
+    A[Запрошено действие] --> B{Допустимо?}
+    B -->|Да| C[Наблюдаемый результат]
+    B -->|Нет| D[Понятный отказ без потери сохраняемого]
+```
+
+Стрелки — {{meaning_of_sequence}}. Это {{current_or_proposed_scope}}.
+Успешная последовательность и наблюдение: {{steps_and_observable_output}}.
+Существенные альтернативы/следующее действие: {{errors_and_recovery}}.
+Отмена/повтор/позднее событие — {{applicable_lifecycle_or_remove_line}}.
+
+## Контракт и интерфейсы
+
+Сохраняемые данные/идентичность/ресурсы/права: {{invariants}}.
+Только применимые реальные входы: {{interfaces_entries_and_limits}}.
+Связанный owner/контракт и база current-утверждений: {{owner_contract_and_evidence_scope}}.
+
+## Проверяемые критерии
+
+| Условие и действие | Правильный наблюдаемый исход | Достаточная проверка |
+|---|---|---|
+| {{success_case}} | {{success_outcome}} | {{success_evidence}} |
+| {{failure_case}} | {{failure_outcome}} | {{failure_evidence}} |
+
+Задача/план и открытое решение: {{task_plan_and_question_if_any}}.

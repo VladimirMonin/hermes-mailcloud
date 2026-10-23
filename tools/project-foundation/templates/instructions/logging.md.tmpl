@@ -1,0 +1,76 @@
+---
+id: "{{logging_instruction_id}}"
+title: "{{project_name}} — логирование"
+kind: instruction
+status: draft
+created: "{{date}}"
+updated: "{{date}}"
+areas: [logging, privacy]
+summary: "Практический выбор событий/полей и проверка фактического диагностического выхода."
+read_when: "Перед добавлением/изменением события, метрики, handler-а, DEV или support/telemetry выхода."
+---
+
+# Изменение диагностики
+
+> Адаптация: нужны реальные owners, политика и команды проекта. Заполни
+> `{{field_name}}` агентом, не средствами Obsidian Templates. Удали неприменимые
+> примеры; это инструкция, не подтверждение runtime privacy.
+> До копирования прочитай [качество](../../references/quality.md),
+> [метаданные](../../references/metadata.md) и
+> [форму политики](../foundation/observability-policy.md.tmpl).
+> Package-relative ссылки — подсказка автору: после адаптации замени проектными
+> маршрутами и удали эту рамку.
+
+## Ответственность и основания
+
+Регулирует полезную диагностику и её выходы, не product state или новую систему
+сбора. Проектная политика, logger/emitter/registry/filter/handler owners:
+{{policy_and_owners}}. Основание пакета — `references/quality.md` относительно
+установленного пакета; при адаптации добавь реальные ссылки на политику и тестовую
+инструкцию. Не создавай второй framework/registry вместо существующего owner-а.
+
+## Порядок работы
+
+1. От сценария выбери факт: начало, результат, существенный отказ/skip и cleanup.
+   Различай запрос, receipt, acceptance, persistence и delivery. Назови producer и
+   необходимые существующие operation/attempt identities при асинхронности.
+2. Выбери stage/reason/outcome, technical codes/parameters, counts/durations с
+   единицами и источником. Unknown — null/omitted по схеме; реальный 0 остаётся 0.
+   Allowlist/запреты проекта: {{allowed_and_forbidden_fields}}. Не разрешай поле
+   только по его имени, не вырезай полезного безопасного соседа приватного поля.
+3. Используй существующий путь записи/структурированный контракт и подходящий
+   уровень. Не пиши каждый tick; не теряй обязательный terminal за sampling.
+   Ротация, объём/срок и failure handling: {{retention_and_failure_handling}}.
+   Фильтр работает до записи; raw fallback после его отказа запрещён.
+4. До запуска обеспечь разрешённую изоляцию. На synthetic данных пройди настоящие
+   emitter → filter → formatter → handler, drain/flush, затем прочитай actual output.
+   Нужные событие/identity/числа/причина присутствуют **и** forbidden sentinels
+   отсутствуют. Пустота, caplog или disabled sink не persistent privacy proof.
+5. Проверь затронутые UI-buffer/export/structured consumers. Для structured вывода
+   нужны непустые parsed records, schema и связь с product facts, не только имя
+   события или `.jsonl`. Synthetic secret не должен утечь в failure artifacts.
+6. Запиши command/raw exit, наблюдение и границы; static/written/run/user-route
+   evidence различаются. После изменения общей privacy/serialization-chain повтори
+   affected cases, остальные результаты переиспользуй по impact.
+
+## Разрешения
+
+Секреты и пользовательское содержимое не логируются по умолчанию. DEBUG — степень
+подробности, не право на content. DEV — явный bounded opt-in с собственным scope,
+sink и выключением; credentials защищены и там. DEV не разрешает публикацию или
+автоматическое включение в поддержку.
+
+Локальный сбор, сохранение, support export и внешняя отправка — разные разрешения.
+Текущая политика передачи: {{external_transfer_policy}}. Не включай аналитику скрыто;
+нужны отдельное решение о получателе/целях/категориях, on/off, очереди и хранении.
+Разрешённый запрос к облачной функции не означает согласие на аналитику.
+
+## Достаточность и обновление
+
+Изменённый путь объясняет нужный факт, полезные поля доходят до output, запреты
+проверены, failures и limits честно названы. Проверять весь logging subsystem ради
+одного count не нужно. Автор обновляет затронутую политику/контракт, reviewer сверяет.
+
+Обновляй инструкцию при изменении owner/channel/units/privacy-chain/retention/DEV/
+export/telemetry. Новое разрешение на содержимое или передачу — решение владельца,
+не редакционный sync. Не выдавай структурную проверку документа за privacy PASS.

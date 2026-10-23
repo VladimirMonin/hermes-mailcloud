@@ -1,0 +1,8 @@
+# Preserve the six original PFK snapshots byte-for-byte (SHA-256 in UPSTREAM.md).
+# Exact paths only; other vendor and project files keep their existing EOL policy.
+/tools/project-foundation/references/architecture/command-first/00_README.md -text
+/tools/project-foundation/references/architecture/command-first/01_Command_First_Introduction.md -text
+/tools/project-foundation/references/architecture/command-first/02_Command_First_Architecture_and_Contracts.md -text
+/tools/project-foundation/references/architecture/command-first/03_Command_First_Architecture_Variants.md -text
+/tools/project-foundation/references/architecture/command-first/04_Command_First_Image_Converter_Architecture.md -text
+/tools/project-foundation/references/ui/figcraft/FigCraft_AI_GUI_Design_Guide_RU.md -text

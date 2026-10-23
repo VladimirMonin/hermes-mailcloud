@@ -1,0 +1,85 @@
+# Adaptation: guide maintenance
+
+Use for user-facing knowledge/translation procedure. Default output
+`docs/instructions/guides.md`; copy payload only, fill fields, recalculate links.
+[Metadata](../../references/metadata.md) owns revision fields/types; use the
+[user guide](../guides/user-guide.md.tmpl) and [glossary](../guides/glossary.md.tmpl).
+All procedural responsibilities are essential. Omit a screenshot or translation
+only if absent/not required in the actual scope; do not invent one for the template.
+
+## Payload
+
+````markdown
+---
+id: "{{project_id}}-INSTRUCTION-GUIDES"
+title: "User guides and translations"
+kind: instruction
+status: draft
+created: "{{created_iso_date}}"
+updated: "{{updated_iso_date}}"
+areas: [documentation, guides]
+summary: "User scenarios and implemented interfaces become usable, versioned guides with honest language coverage."
+read_when: "A user capability, command, screen or limitation changes, or release guides/translations are prepared."
+---
+
+# Guides and translations
+
+## Scope
+
+Primary language: {{primary_language_from_profile}}. Required release translations:
+{{release_languages_or_explicit_none}}. Existing primary sources remain authoritative;
+not all internal docs need translation. This procedure authorizes no product runs,
+private screenshots, paid tools, publication or release.
+
+## Write from the real task
+
+1. Find the scenario, implemented interface/contract and scoped evidence at
+   {{scenario_contract_and_interface_routes}}. Separate source inspection, real
+   executed path and future proposal. Never turn a mockup into a shipped how-to.
+2. Update the existing guide at {{guide_entry_and_locations}}. A new standalone
+   task may use {{guide_form_route}}. Getting started, task steps, reference and
+   troubleshooting can be sections, not four mandatory files.
+3. Explain result, supported version/platform, prerequisites, exact actions, observable
+   success, important failure/next action and limitations. Keep technical commands,
+   flags, keys, IDs and units unchanged. Link precise reference data instead of
+   duplicating its authoritative table. Avoid agent report language in user steps.
+
+## Language revision workflow
+
+Give each language its own ID and `language`, reciprocal ordinary Markdown links
+and `related` IDs. Primary: `source_revision`. Translation: `translation_source`
+(primary ID), `translation_source_revision` (actually checked edition),
+`translation_state` (current/outdated/unknown). Use the shared metadata schema.
+
+Content change increments the primary edition. Compare each translation's checked
+edition to the primary: unequal means outdated, absent/inaccessible means unknown.
+Equal revisions require substantive review, not date equality. Update affected steps,
+restrictions, examples and image labels before advancing the checked edition/state.
+Pure formatting can justify no translation impact without an artificial revision bump.
+
+The feature/guide author updates affected knowledge; {{guide_owner_role}} maintains
+pairs and one glossary at {{glossary_route_or_existing_term_owner}}. The release owner
+{{release_owner_role}} assigns actual translation work and confirms required languages
+before that release. A deferred version keeps its old checked edition and a visible
+warning/current-primary link; do not call it current or release-ready. Missing required
+work outside scope goes to its exact owner, not an invisible waiver.
+
+## Illustrations and verification
+
+Use real safe screenshots when they explain a step and are available/authorized.
+Version/language must match or carry an explicit explanation; alt/caption and origin
+remain. Preserve original evidence when deriving a crop. A future concept is labeled
+as such; Figma/image generation never block a useful text guide.
+
+Before freeze inspect source fidelity, important failure, both language links, unique
+IDs, revision/state consistency, technical tokens and image provenance. Run
+{{verified_docs_check_or_unconfigured}}; report actual exits and unrun product/visual
+checks separately. Static checks cannot judge translation quality or installed readiness.
+Add the nearest entry and follow the project's acceptance/save policy; retain required
+independence without appointing another reviewer. Stop after the selected task.
+
+## Update conditions
+
+Revisit when interface steps, guide locations, primary language, release languages,
+revision schema or responsible roles change. Policy changes require their actual owner.
+````

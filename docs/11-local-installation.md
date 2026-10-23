@@ -262,9 +262,12 @@ See [failure after a public operation](08-configuration-and-secrets.md#failure-a
 There are **two different configuration files**. Application `--config` selects
 HMC profiles/policy, not backend authentication storage. `RCLONE_CONFIG` selects
 the separate rclone file and must be present in the **invoking process environment**.
-Keep the matching existing application profile explicitly selected with `--profile`;
-the CLI otherwise selects its default profile. A default `remote_not_configured`
-refusal does not establish that saved credentials are missing.
+Keep the matching existing application profile explicitly selected with `--profile`.
+In current-source builds, an omitted option uses `HMC_PROFILE`, then `default`;
+explicit `--profile default` wins over the environment. For older pinned release
+assets, use the explicit option rather than assuming the new source behavior.
+A default `remote_not_configured` refusal does not establish that saved credentials
+are missing.
 
 Use known locators without opening/copying secret file bodies. These are fictitious
 non-secret paths; `work` must be a matching profile already in the chosen HMC file:
@@ -362,6 +365,16 @@ Start a fresh Hermes session or run `/reload-skills`, then requests such as “u
 ## 6. Development and updates
 
 Use the checkout only for development:
+
+Current source-built wheels expose the internal Python
+[`MailCloudApplication` interface](01-architecture.md#current-in-process-application-interface)
+for `version`, `ls` and `stat` only. The older immutable `v0.1.0` wheel linked above
+predates this boundary, even though the development package still reports `0.1.0`.
+For a Python consumer, install the exact accepted source-built wheel into that
+consumer's environment; an operational uv tool has its own interpreter and does
+not add imports to an unrelated Python process. Verify artifact/import provenance,
+not just the version string. This does not require an HTTP server or a replacement
+of the user's operational installation during development.
 
 ```bash
 uv sync --locked --all-groups --all-extras

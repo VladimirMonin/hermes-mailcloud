@@ -31,6 +31,10 @@ PROJECT = "hermes-mailcloud"
 PUBLIC_URL = "https://cloud.mail.ru/public/installed-wheel-synthetic-capability/path"
 DIAGNOSTIC = "installed-backend-private-sentinel"
 MAX_OUTPUT = 2 * 1024 * 1024
+APPLICATION_SOURCES = tuple(
+    f"hermes_mailcloud/application/{name}.py"
+    for name in ("__init__", "contracts", "validation", "composition", "service")
+)
 
 
 class SmokeFailure(RuntimeError):
@@ -425,8 +429,8 @@ def distribution_info(directory: Path) -> dict:
         require(entry_point == "hermes_mailcloud.cli:app", "wrong installed console entry point")
         require(any(name.endswith("/LICENSE") for name in names), "wheel license is missing")
         require(
-            not any(name.startswith(("tests/", "scripts/")) for name in names),
-            "test sources leaked into wheel",
+            not any(name.startswith(("tests/", "scripts/", "tools/")) for name in names),
+            "test/tool sources leaked into wheel",
         )
         sources = {
             name: hashlib.sha256(archive.read(name)).hexdigest()
@@ -434,6 +438,9 @@ def distribution_info(directory: Path) -> dict:
             if name.startswith("hermes_mailcloud/") and name.endswith(".py")
         }
     require("hermes_mailcloud/__init__.py" in sources, "wheel package source is missing")
+    require(
+        all(name in sources for name in APPLICATION_SOURCES), "wheel application source is missing"
+    )
     with tarfile.open(sdists[0]) as archive:
         names = archive.getnames()
         archive_has_no_runtime_state(names)
@@ -445,6 +452,14 @@ def distribution_info(directory: Path) -> dict:
             "sdist and wheel metadata disagree",
         )
         require(any(name.endswith("/LICENSE") for name in names), "sdist license is missing")
+        if any("/tools/project-foundation/" in name for name in names):
+            require(
+                all(
+                    any(name.endswith("/tools/project-foundation/" + notice) for name in names)
+                    for notice in ("LICENSE", "UPSTREAM.md", "THIRD_PARTY_NOTICES.md")
+                ),
+                "sdist vendor notices are missing",
+            )
     return {
         "wheel": str(wheels[0].resolve()),
         "sdist": str(sdists[0].resolve()),
@@ -605,6 +620,64 @@ def exercise(
             else []
         )
 
+    control["api_stat_path"] = "/Hermes/private/report ü &;$%.txt"
+    control["failure_target"] = "fake:/Hermes/private/api-failure"
+    control_path.write_text(json.dumps(control), encoding="utf-8")
+    before_api = calls()
+    stdout, stderr = commands.run(
+        "installed-direct-api-no-cli-sdk",
+        [*prefix, "api", str(control_path)],
+        environment=fake_environment,
+    )
+    require(
+        not stderr and PUBLIC_URL not in stdout and DIAGNOSTIC not in stdout, "unsafe API output"
+    )
+    api_report = json.loads(stdout)
+    require(api_report["cli_sdk_imported"] is False, "API imported CLI SDK")
+    require(api_report["application_output"] is False, "API wrote output")
+    for name, operation, code in (
+        ("version", "version", 0),
+        ("ls", "ls", 0),
+        ("stat", "stat", 0),
+        ("refusal", "ls", 2),
+        ("failure", "stat", 10),
+        ("after_failure", "ls", 0),
+    ):
+        require(api_report["exits"][name] == code, "wrong direct API exit")
+        json_envelope(
+            json.dumps(api_report["payloads"][name]),
+            "",
+            operation=operation,
+            exit_code=code,
+            validator=validate["result-envelope.schema.json"],
+        )
+    require(
+        api_report["payloads"]["ls"]["result"]["items"]
+        and api_report["payloads"]["stat"]["result"]["size"] == 16
+        and api_report["payloads"]["failure"]["error"]["kind"] == "network_error"
+        and api_report["payloads"]["refusal"]["error"]["kind"] == "invalid_arguments",
+        "direct API did not exercise the real read/refusal path",
+    )
+    require(
+        calls()[len(before_api) :]
+        == [
+            ["lsjson", "fake:/Hermes"],
+            ["lsjson", "fake:" + control["api_stat_path"], "--stat", "--hash"],
+            ["lsjson", "fake:/Hermes/private/api-failure", "--stat", "--hash"],
+            ["lsjson", "fake:/Hermes"],
+        ],
+        "direct API execution/refusal boundary changed",
+    )
+    api_components = api_report["provenance"]["loaded_components"]
+    require("hermes_mailcloud.cli" not in api_components, "API provenance pre-imported CLI")
+    require(
+        all(
+            provenance["loaded_components"].get(name) == stamp
+            for name, stamp in api_components.items()
+        ),
+        "API component bytes differ from the independent full provenance probe",
+    )
+
     def case(
         label: str,
         arguments: list[str],
@@ -662,7 +735,7 @@ def exercise(
     source.parent.mkdir()
     source.write_text("synthetic wheel payload", encoding="utf-8")
     destination = source.with_name("downloaded 'literal'.txt")
-    remote = "/Hermes/private/report ü &;$%.txt"
+    remote = control["api_stat_path"]
     for label, arguments, operation in (
         ("file-ls", ["ls", "/Hermes", "--json"], "ls"),
         ("file-stat", ["stat", remote, "--json"], "stat"),
@@ -673,8 +746,13 @@ def exercise(
         ("file-copy", ["cp", remote, "/Hermes/private/copied.txt", "--json"], "cp"),
         ("file-remove", ["rm", remote, "--json", "--yes"], "rm"),
     ):
-        _, invoked = case(label, arguments, operation)
+        payload, invoked = case(label, arguments, operation)
         require(len(invoked) == 1, "file command was not executed exactly once")
+        if operation in {"ls", "stat"}:
+            require(
+                payload == api_report["payloads"][operation],
+                "installed API/CLI read parity changed",
+            )
         if operation == "upload":
             require(
                 invoked[0] == ["copyto", str(source), "fake:" + remote, "--immutable"],
@@ -857,6 +935,7 @@ def exercise(
     )
     return {
         "provenance": provenance,
+        "application_api": api_report,
         "scenarios": scenarios,
         "journal": journal_result,
         "real_console_launcher": True,

@@ -39,12 +39,16 @@ PROFILE_FIELDS = frozenset(
 
 
 @dataclass(frozen=True, slots=True)
-class CliConfigOverrides:
-    """Only the global config inputs resolved before command-specific options."""
+class ConfigOverrides:
+    """Explicit configuration inputs shared by in-process callers and adapters."""
 
     profile: str | None = None
     remote: str | None = None
     config_path: Path | None = None
+
+
+# Keep the existing resolver's callers source-compatible.
+CliConfigOverrides = ConfigOverrides
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,19 +87,28 @@ def default_config_path(environment: Mapping[str, str] | None = None) -> Path:
     return config_home / "hermes-mailcloud" / "config.toml"
 
 
+def resolve_profile_name(
+    overrides: ConfigOverrides, *, environment: Mapping[str, str] | None = None
+) -> str:
+    """Select a profile without reading configuration or discovering a backend."""
+    env = os.environ if environment is None else environment
+    name = overrides.profile or env.get("HMC_PROFILE") or DEFAULT_PROFILE
+    if not isinstance(name, str) or not name.strip():
+        raise ConfigError("profile must be a non-empty string", field="profile")
+    return name
+
+
 def resolve_config(
-    cli: CliConfigOverrides | None = None,
+    cli: ConfigOverrides | None = None,
     *,
     environment: Mapping[str, str] | None = None,
 ) -> ResolvedConfig:
-    """Resolve CLI > environment > profile file > defaults without credential fields."""
-    cli = cli or CliConfigOverrides()
+    """Resolve explicit inputs > environment > profile > defaults without credentials."""
+    cli = cli or ConfigOverrides()
     env = os.environ if environment is None else environment
     config_path, config_was_explicit = _resolve_config_path(cli, env)
     profiles = _load_profiles(config_path, required=config_was_explicit)
-    profile_name = cli.profile or env.get("HMC_PROFILE") or DEFAULT_PROFILE
-    if not isinstance(profile_name, str) or not profile_name.strip():
-        raise ConfigError("profile must be a non-empty string", field="profile")
+    profile_name = resolve_profile_name(cli, environment=env)
     profile = _profile_for_name(profiles, profile_name)
 
     remote = _first_not_none(cli.remote, env.get("HMC_REMOTE"), profile.get("remote"))
@@ -162,7 +175,7 @@ def resolve_config(
     )
 
 
-def _resolve_config_path(cli: CliConfigOverrides, env: Mapping[str, str]) -> tuple[Path, bool]:
+def _resolve_config_path(cli: ConfigOverrides, env: Mapping[str, str]) -> tuple[Path, bool]:
     value = _first_not_none(cli.config_path, env.get("HMC_CONFIG"))
     if value is None:
         return default_config_path(env), False

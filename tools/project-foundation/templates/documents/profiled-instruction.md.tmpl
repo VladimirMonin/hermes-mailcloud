@@ -1,0 +1,55 @@
+# Form: owner instruction
+
+Use when an existing owner instruction cannot cover a distinct recurring responsibility.
+Default output: `docs/instructions/<subject>.md`. First follow
+[instruction authoring](../instructions/instruction-authoring.md.tmpl).
+Copy payload only; fill agent placeholders and output-relative links per
+[metadata](../../references/metadata.md). All main sections are essential; omit
+optional commands/diagrams only if they add no value. A declared rule still needs
+acceptance and a real route to its reader, not just a file on disk.
+
+## Payload
+
+````markdown
+---
+id: "{{project_id}}-INSTRUCTION-{{unique_subject_id}}"
+title: "{{subject}} — engineering procedure"
+kind: instruction
+status: draft
+created: "{{created_iso_date}}"
+updated: "{{updated_iso_date}}"
+areas: ["{{subject_area}}"]
+summary: "{{responsibility_and_boundary}}"
+read_when: "{{concrete_tasks_files_contracts_and_trigger_terms}}"
+---
+
+# {{subject}}
+
+## Scope and owner
+
+{{actual_owner_paths_symbols_and_contract_links}}
+{{what_this_regulates_and_what_belongs_elsewhere}}
+
+## Practical sequence
+
+1. {{required_sources_and_preflight}}
+2. {{normal_owner_path_and_smallest_change}}
+3. {{affected_knowledge_and_actual_consumer_routes}}
+
+{{optional_verified_command_with_cwd_environment_side_effects_or_remove}}
+
+## Constraints and reasons
+
+{{essential_invariants_negative_cases_and_why_they_matter}}
+{{policy_and_data_boundaries_not_granted_by_this_document}}
+
+## Sufficient verification
+
+{{observable_success_failure_and_targeted_existing_checks}}
+{{evidence_scope_raw_results_and_what_static_or_mocked_checks_do_not_prove}}
+
+## Update and connection
+
+{{owner_contract_command_or_consumer_changes_that_require_revision}}
+{{catalog_trigger_daily_entry_and_actual_client_connection_manual_or_verified}}
+````

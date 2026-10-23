@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import errno
+import hashlib
 import importlib.util
 import io
 import json
@@ -72,6 +73,9 @@ def test_ci_uv_cache_is_selected_after_runner_start(tmp_path: Path, monkeypatch)
 
 def test_ci_test_packs_are_a_disjoint_cover_of_all_test_modules() -> None:
     workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    assert workflow.count("python -m pytest") == 5
+    assert "Offline application API pack" in workflow
+    assert len(re.findall(r"\btests/application\b", workflow)) == 1
     selected = {ROOT / value for value in re.findall(r"\btests/[A-Za-z0-9_./-]+", workflow)}
     modules = sorted((ROOT / "tests").rglob("test_*.py"))
     assert modules
@@ -240,6 +244,7 @@ def _archives(
     sdist_license=True,
     sdist_version="0.1.0a0",
     runtime_leak=False,
+    omitted_application=None,
 ) -> None:
     metadata = b"Name: hermes-mailcloud\nVersion: 0.1.0a0\nLicense-Expression: MIT\n\n"
     with zipfile.ZipFile(root / "hermes_mailcloud-0.1.0a0-py3-none-any.whl", "w") as archive:
@@ -249,6 +254,9 @@ def _archives(
             "[console_scripts]\nhermes-mailcloud = hermes_mailcloud.cli:app\n",
         )
         archive.writestr("hermes_mailcloud/__init__.py", '__version__ = "0.1.0a0"\n')
+        for name in ("__init__", "contracts", "validation", "composition", "service"):
+            if name != omitted_application:
+                archive.writestr(f"hermes_mailcloud/application/{name}.py", b"# synthetic source\n")
         if wheel_license:
             archive.writestr("hermes_mailcloud-0.1.0a0.dist-info/licenses/LICENSE", "MIT License")
     with tarfile.open(root / "hermes_mailcloud-0.1.0a0.tar.gz", "w:gz") as archive:
@@ -288,19 +296,33 @@ def test_distribution_gate_pins_real_archive_source_bytes(smoke, tmp_path: Path)
     assert info["version"] == "0.1.0a0"
     assert info["entry_point"] == "hermes_mailcloud.cli:app"
     assert len(info["sources"]["hermes_mailcloud/__init__.py"]) == 64
+    for name in ("__init__", "contracts", "validation", "composition", "service"):
+        assert (
+            info["sources"][f"hermes_mailcloud/application/{name}.py"]
+            == hashlib.sha256(b"# synthetic source\n").hexdigest()
+        )
     assert len(info["wheel_sha256"]) == len(info["sdist_sha256"]) == 64
 
 
+@pytest.mark.parametrize("name", ["__init__", "contracts", "validation", "composition", "service"])
+def test_wheel_gate_requires_every_application_module(smoke, tmp_path: Path, name: str) -> None:
+    _archives(tmp_path, omitted_application=name)
+    with pytest.raises(smoke.SmokeFailure, match="application source is missing"):
+        smoke.distribution_info(tmp_path)
+
+
+@pytest.mark.parametrize("mode", ["probe", "api"])
 def test_standalone_driver_rejects_a_source_checkout_runtime_before_component_import(
     smoke,
     tmp_path: Path,
+    mode: str,
 ) -> None:
     driver = tmp_path / "copied-driver.py"
     shutil.copyfile(ROOT / "tests/helpers/installed_fake_driver.py", driver)
     control = tmp_path / "control.json"
     control.write_text(json.dumps({"prefix": sys.prefix, "checkout": str(ROOT)}), encoding="utf-8")
     result = subprocess.run(
-        smoke.isolated_python(Path(sys.executable), str(driver), "probe", str(control)),
+        smoke.isolated_python(Path(sys.executable), str(driver), mode, str(control)),
         cwd=ROOT,
         env=smoke.clean_environment(tmp_path, tmp_path / "own-cache"),
         capture_output=True,

@@ -1,0 +1,55 @@
+# Form: defect analysis
+
+Use when a bug's reproduction/cause needs durable explanation, not for every typo.
+Default output: `docs/research/<bug>.md` or an existing incident family. A small issue
+can contain the same essentials without another file. Copy payload only and fill
+[metadata](../../references/metadata.md). Essential: symptom/expected/reproduction,
+separated facts/hypotheses, cause or honest unknown, bounded fix/verification. Remove
+optional alternatives/timeline, not failure conditions or data-safety boundaries.
+
+## Payload
+
+````markdown
+---
+id: "{{project_id}}-INCIDENT-{{unique_id}}"
+title: "{{specific_symptom}}"
+kind: incident
+status: draft
+created: "{{created_iso_date}}"
+updated: "{{updated_iso_date}}"
+areas: ["{{affected_area}}"]
+summary: "{{symptom_expected_result_and_current_conclusion_limit}}"
+---
+
+# {{specific_symptom}}
+
+## Expected versus observed
+
+{{accepted_requirement_or_contract_link}}
+{{observable_failure_exact_source_artifact_platform_and_conditions}}
+
+## Safe reproduction and scope
+
+{{minimal_inputs_preconditions_steps_expected_actual_and_privacy_limits}}
+{{which_paths_owners_and_data_are_in_scope_and_what_is_excluded}}
+
+## Facts, hypotheses and cause
+
+| Observation / hypothesis | Evidence | Conclusion / unknown |
+|---|---|---|
+| {{specific_item}} | {{source_or_executed_result}} | {{what_it_actually_establishes}} |
+
+{{root_cause_and_owner_or_exact_next_bounded_question}}
+{{distinguish_application_test_fixture_and_environment_defects}}
+
+## Correction and verification
+
+{{smallest_owner_change_and_affected_contract_instruction_guide}}
+{{regression_that_distinguishes_the_bug_from_a_similar_green_implementation}}
+{{actual_commands_raw_exits_and_not_run_limits}}
+
+## Disposition
+
+{{fixed_verified_deferred_or_unknown_separate_from_document_status}}
+{{remaining_required_action_owner_and_tracker_link}}
+````

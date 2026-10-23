@@ -1,0 +1,86 @@
+# Adaptation: documentation instruction
+
+Use for the project's practical knowledge-maintenance route, not a new CMS.
+Copy only payload; fill agent `{{fields}}`, remove irrelevant sections and recompute
+all links from its actual output path. Default output: `docs/instructions/documentation.md`.
+Required metadata/types: [single schema](../../references/metadata.md).
+Foundations/procedures: [lifecycle](../../references/lifecycle.md).
+Essential: when, scope, owner-selection/update path, constraints, checks and update
+triggers. Optional: diagrams/assets/views when absent from the project. Existing
+native instructions/local decisions prevail; do not replace them with boilerplate.
+
+## Payload
+
+````markdown
+---
+id: "{{project_id}}-INSTRUCTION-DOCUMENTATION"
+title: "Documentation — create, maintain and retire"
+kind: instruction
+status: draft
+created: "{{created_iso_date}}"
+updated: "{{updated_iso_date}}"
+areas: [documentation]
+summary: "Maintain affected project knowledge at one source and keep it reachable."
+read_when: "Creating/updating documents, closing a substantive change or retiring obsolete knowledge."
+---
+
+# Documentation
+
+## Scope and entry
+
+Start at {{documentation_entry_relative_link}} and the project profile/native rules.
+This procedure owns documentation, not product behavior, access or publication policy.
+
+## Practical route
+
+1. Find existing knowledge and its owner. Separate requirement, current implementation,
+   proposal, history and verification. Update a suitable existing document before
+   creating a new one; linking or justified no-document-impact can be sufficient.
+2. Select kind/place/form from {{metadata_and_template_routes}}: current architecture,
+   contract/reference, scenario, plan/decision, research, guide or verification.
+   Use existing project directories; create no empty tree for completeness.
+3. Before writing name finite paths and check dirty intersections. Copy only the
+   selected payload, fill initial YAML, remove unnecessary sections and preserve
+   project-specific decisions. Agent placeholders are not Obsidian variables.
+4. Use ordinary relative Markdown links and stable IDs/anchors. Add one route from
+   the nearest relevant entry; add an instruction trigger to its actual catalog.
+   A link alone does not prove automatic agent loading.
+5. For standalone architecture/contracts/scenarios include meaningful Mermaid
+   relationships/states, or link a directly applicable parent diagram for an extracted
+   fragment. State the arrows' meaning and distinguish proposed components.
+   Check changed diagrams with an available renderer; report unrendered honestly.
+6. Use illustrations only where they explain a task. Add alt/caption, version,
+   language and origin; concepts are not implementation screenshots. Never acquire
+   private data just for illustration. Text remains usable without images/Figma.
+7. At substantive slice completion assess architecture, contracts, instructions,
+   scenarios, examples/commands, guides and translations. The author updates affected
+   owners in the same logical result; no impact permits a concise reason, not fake edits.
+
+## Replacement, temporary outputs and views
+
+Keep current knowledge at one stable address. A replacement declares `supersedes`,
+old text becomes `superseded` with a human link and exact scope. Archive without
+replacement records reason/origin and unresolved obligations; preserve historical
+versions/evidence. Archiving never grants data deletion. Use {{archive_route}}.
+
+Temporary TODOs, raw output and agent reports remain in the task's authorized area;
+promote durable conclusions to their owner, not the whole run folder or chat history.
+Do not create another tracker. Only remove your own temporary files when permitted.
+Markdown is the source; optional catalog/Bases views select it, not a second wiki/DB.
+Use {{views_route_or_explicit_no_views}} without requiring Obsidian to author/read docs.
+
+## Checks and finish
+
+Use {{verified_docs_check_command_or_explicit_unconfigured}} from
+{{check_cwd_and_permitted_scope}}; do not invent a successful command.
+Check properties/types/duplicate IDs, output-relative links, unresolved required fields,
+source fidelity, diagram/image limits and real navigation. Capture raw exit/findings;
+static success proves no runtime/visual behavior. Follow the project's acceptance/save
+policy, including independent review when required, without appointing another layer;
+preserve foreign hunks. Stop after the agreed result.
+
+## Update this instruction
+
+Revisit on schema, locations, template/check command, knowledge-owner or client-route
+change. Synchronize accepted technical facts; policy changes need their actual owner.
+````

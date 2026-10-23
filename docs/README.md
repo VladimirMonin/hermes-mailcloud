@@ -6,8 +6,14 @@
 
 ## Guide
 
+- [`foundation/project-philosophy.md`](foundation/project-philosophy.md) — purpose, engineering priorities and finite completion.
+- [`foundation/architecture-principles.md`](foundation/architecture-principles.md) — command-first direction, application ownership and compatibility boundaries.
+- [`plans/command-first-refactor.md`](plans/command-first-refactor.md) — proposed Application API, finite implementation slices and acceptance criteria; not an implemented API.
+- [`foundation/observability-policy.md`](foundation/observability-policy.md) — useful diagnostics, privacy, actual channels and external-transfer limits.
+- [`../tools/project-foundation/README.md`](../tools/project-foundation/README.md) — complete imported methodology, skills and source attribution; not current product behavior.
+
 - [`00-research-summary.md`](00-research-summary.md) — research summary.
-- [`01-architecture.md`](01-architecture.md) — target architecture and boundaries.
+- [`01-architecture.md`](01-architecture.md#current-in-process-application-interface) — current source-built version/read Application API and transitional CLI ownership; historical proposals are labeled separately.
 - [`02-command-contract.md`](02-command-contract.md) — frozen CLI contract, explicit dependency setup, and labeled future proposals.
 - [`03-development-plan.md`](03-development-plan.md) — implementation waves.
 - [`04-probe-plan.md`](04-probe-plan.md) — implemented safe probe harness and planned live capability evidence.

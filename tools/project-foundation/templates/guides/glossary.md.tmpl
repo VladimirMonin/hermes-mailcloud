@@ -1,0 +1,38 @@
+# Form: shared user glossary
+
+Use only when linked guides need stable translated terminology and no adequate
+existing term owner exists. Default: `docs/guides/glossary.md`; a short guide may
+keep its term table in the primary instead. Copy payload only and fill
+[metadata](../../references/metadata.md). Meaning and exact technical token are
+essential; remove unused languages/rows and add only real project terms, not a
+second runtime message-code database. A placeholder row is not an approved term.
+
+## Payload
+
+````markdown
+---
+id: "{{project_id}}-GUIDE-GLOSSARY"
+title: "User terminology"
+kind: reference
+status: draft
+created: "{{created_iso_date}}"
+updated: "{{updated_iso_date}}"
+areas: [guides, terminology]
+summary: "{{selected_guide_family_and_shared_term_scope}}"
+owner: "{{guide_or_term_owner_role}}"
+---
+
+# User terminology
+
+{{languages_and_primary_guide_links_and_any_existing_exact_token_owner}}
+
+| Meaning | RU wording | EN wording | Exact technical token / unit |
+|---|---|---|---|
+| {{actual_meaning}} | {{ru_wording}} | {{en_wording}} | {{unchanged_identifier_or_explicit_not_applicable_in_prose}} |
+
+## Maintenance
+
+{{who_resolves_term_conflicts_and_which_guides_must_be_updated_when_the_term_changes}}
+Runtime/API identifiers, commands and units retain technical meaning. A wording
+change does not change product behavior or authorize a new capability.
+````

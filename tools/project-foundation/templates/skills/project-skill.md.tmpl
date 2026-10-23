@@ -1,0 +1,69 @@
+# Form: NEW project-specific skill
+
+This is a small Agent Skills structure, **not** a replacement for a global
+skill-builder or a requirement to install one. First find an existing project skill
+and responsibility. Create only a distinct useful procedure, not a wrapper for every
+document. Default output: project's selected skill directory / `<skill-name>/SKILL.md`.
+Follow the client's verified project connection, not an assumed universal loader.
+
+Copy payload only, fill agent placeholders. `name` must match its parent directory:
+1–64 lower-case letters/digits/hyphens, no leading/trailing/consecutive hyphen.
+Description 1–1024 characters: meaningful action and trigger. `metadata` is a mapping
+of **strings to strings**, including version/date. No ordinary-document id/kind/status
+passport. Do not add tool grants, client-specific controls or a license without their
+owner's actual decision. Omit metadata keys that have no use, not core name/description.
+Essential body sections below all stay; add resources/scripts only for real need.
+
+Official format: [Agent Skills specification](https://agentskills.io/specification).
+Shared-form boundary: [metadata](../../references/metadata.md).
+
+## Payload
+
+````markdown
+---
+name: "{{skill_name}}"
+description: "{{specific_action_trigger_terms_and_when_it_is_useful}}"
+metadata:
+  version: "{{skill_version}}"
+  updated: "{{updated_iso_date}}"
+---
+
+# {{skill_title}}
+
+## Use / do not use
+
+{{specific_applicability_and_non_applicability_no_extra_permissions_or_agent_chain}}
+
+## Inputs
+
+{{project_root_rules_task_allowed_paths_existing_owners_and_needed_resources}}
+
+## Procedure
+
+1. {{find_existing_mechanism_read_applicable_rules_and_bound_the_result}}
+2. {{perform_the_smallest_useful_task_using_real_owners_and_contracts}}
+3. {{verify_proportionately_update_affected_knowledge_and_preserve_local_changes}}
+4. {{return_concrete_result_actual_checks_limits_and_required_remainder_then_stop}}
+
+## Missing facts and stop
+
+{{one_specific_question_or_bounded_source_lookup_for_material_missing_input}}
+{{finish_criterion_and_what_must_not_be_claimed_without_evidence}}
+
+## Resources
+
+{{ordinary_relative_links_from_this_SKILL_to_project_owned_support_or_remove_heading}}
+
+## Positive example
+
+{{small_honest_input_action_output_example_labeled_educational_if_synthetic}}
+
+## Incorrect application
+
+{{plausible_misuse_and_why_it_crosses_scope_or_evidence_boundary}}
+````
+
+Validate native frontmatter, matching folder/name, unique local name, actual trigger,
+resource access and selected client route. File existence/readability is not proof
+of auto-discovery or successful execution. Keep one owner for shared resources;
+never copy full foundations into every skill or silently modify imported packages.

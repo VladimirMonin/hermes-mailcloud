@@ -1,0 +1,49 @@
+# Form: release notes
+
+Use for an actual chosen release scope, not a permission to tag/publish or an invented
+shipment. Default output: existing release family or `docs/releases/<version>.md`.
+Copy payload only; [metadata](../../references/metadata.md) applies to the record.
+Essential: user changes, support/upgrade constraints, exact scope and evidence limits.
+Remove irrelevant fixes/features/migration sections; no mandatory empty N/A. A local
+candidate record is not a public release and must say so. Public license/wording are
+owner decisions, not template defaults.
+
+## Payload
+
+````markdown
+---
+id: "{{project_id}}-RELEASE-{{unique_version_id}}"
+title: "{{project_name}} {{release_version}} — notes"
+kind: journal
+status: draft
+created: "{{created_iso_date}}"
+updated: "{{updated_iso_date}}"
+areas: [releases]
+summary: "{{user_result_release_scope_and_current_delivery_limit}}"
+release_owner: "{{responsible_release_role_or_person}}"
+---
+
+# {{project_name}} {{release_version}}
+
+{{candidate_or_released_state_actual_date_and_supported_platform_scope}}
+
+## Changes for users
+
+{{verified_features_and_meaningful_fixes_relative_to_actual_previous_release}}
+{{links_to_current_guides_and_unsupported_or_experimental_modes}}
+
+## Upgrade and compatibility
+
+{{verified_install_upgrade_route_and_data_configuration_compatibility_limits}}
+{{migration_or_rollback_if_applicable_without_invented_safety_claims}}
+
+## Provenance and readiness
+
+{{source_range_exact_artifact_identity_and_verification_links}}
+{{actual_checks_limits_and_required_language_guide_revisions}}
+{{required_translation_owners_and_unresolved_release_blockers_or_none}}
+
+## Delivery state
+
+{{what_was_actually_saved_shipped_or_not_published_and_authorization_boundary}}
+````

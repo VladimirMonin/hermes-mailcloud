@@ -1,0 +1,3 @@
+# Tooling only; not an application dependency. Python >=3.10 for this checker.
+# PyPI release requires Python >=3.8; safe YAML parsing, no executable YAML tags.
+PyYAML==6.0.3

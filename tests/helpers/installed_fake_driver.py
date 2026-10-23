@@ -1,15 +1,18 @@
 """Standalone test-only argv driver; copy it outside the checkout before execution.
 
-Only cli.RcloneRunner's executable argv is injected. All CLI, command, batch,
-journal, platform and runner implementations must be the installed wheel's bytes.
+Only the external executable argv is injected at application composition and,
+temporarily, the legacy CLI seam. All owners remain the installed wheel's bytes.
 """
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import importlib
+import importlib.abc
 import importlib.metadata
 import importlib.util
+import io
 import json
 import os
 import sys
@@ -17,18 +20,30 @@ from pathlib import Path
 
 PUBLIC_URL = "https://cloud.mail.ru/public/installed-wheel-synthetic-capability/path"
 DIAGNOSTIC = "installed-backend-private-sentinel"
-_COMPONENTS = (
+_API_COMPONENTS = (
     "hermes_mailcloud",
+    "hermes_mailcloud.application",
+    "hermes_mailcloud.application.contracts",
+    "hermes_mailcloud.application.validation",
+    "hermes_mailcloud.application.composition",
+    "hermes_mailcloud.application.service",
+    "hermes_mailcloud.config",
+    "hermes_mailcloud.core.errors",
+    "hermes_mailcloud.core.result",
+    "hermes_mailcloud.output",
+    "hermes_mailcloud.commands.read",
+    "hermes_mailcloud.rclone.runner",
+)
+_COMPONENTS = (
+    *_API_COMPONENTS,
     "hermes_mailcloud.cli",
     "hermes_mailcloud.batch",
     "hermes_mailcloud.commands.public",
     "hermes_mailcloud.commands.transfer",
-    "hermes_mailcloud.commands.read",
     "hermes_mailcloud.commands.mkdir",
     "hermes_mailcloud.commands.move_copy",
     "hermes_mailcloud.commands.remove",
     "hermes_mailcloud.journal",
-    "hermes_mailcloud.rclone.runner",
 )
 
 
@@ -37,7 +52,7 @@ def require(condition: bool, message: str) -> None:
         raise RuntimeError(message)
 
 
-def installed_provenance(control: dict) -> dict:
+def installed_provenance(control: dict, *, api_only: bool = False) -> dict:
     require(
         bool(sys.flags.isolated) and bool(sys.flags.utf8_mode), "runtime must be isolated UTF-8"
     )
@@ -57,7 +72,8 @@ def installed_provenance(control: dict) -> dict:
     )
     for name in ("pytest", "ruff", "jsonschema", "coverage"):
         require(importlib.util.find_spec(name) is None, "development package leaked into runtime")
-    modules = [importlib.import_module(name) for name in _COMPONENTS]
+    selected = _API_COMPONENTS if api_only else _COMPONENTS
+    modules = [importlib.import_module(name) for name in selected]
     platform_name = "journal_windows" if os.name == "nt" else "journal_posix"
     modules.append(importlib.import_module("hermes_mailcloud._platform." + platform_name))
     if os.name == "nt":
@@ -81,26 +97,43 @@ def installed_provenance(control: dict) -> dict:
         digest = hashlib.sha256(path.read_bytes()).hexdigest()
         require(control["sources"].get(relative) == digest, "component is not the wheel's bytes")
         loaded[name] = {"path": str(path), "wheel_path": relative, "sha256": digest}
-    cli = modules[1]
-    for name, module in (
-        ("BatchCommands", "hermes_mailcloud.batch"),
-        ("PublicCommands", "hermes_mailcloud.commands.public"),
-        ("TransferCommands", "hermes_mailcloud.commands.transfer"),
-        ("ReadCommands", "hermes_mailcloud.commands.read"),
-        ("MkdirCommand", "hermes_mailcloud.commands.mkdir"),
-        ("MoveCopyCommands", "hermes_mailcloud.commands.move_copy"),
-        ("RemoveCommand", "hermes_mailcloud.commands.remove"),
-    ):
+    application = importlib.import_module("hermes_mailcloud.application")
+    service = importlib.import_module("hermes_mailcloud.application.service")
+    composition = importlib.import_module("hermes_mailcloud.application.composition")
+    require(application.MailCloudApplication is service.MailCloudApplication, "API substitution")
+    require(
+        service.ReadCommands
+        is importlib.import_module("hermes_mailcloud.commands.read").ReadCommands,
+        "application read-service substitution",
+    )
+    require(
+        composition.RcloneRunner
+        is importlib.import_module("hermes_mailcloud.rclone.runner").RcloneRunner,
+        "application runner substitution",
+    )
+    if not api_only:
+        cli = importlib.import_module("hermes_mailcloud.cli")
         require(
-            getattr(cli, name) is getattr(importlib.import_module(module), name),
-            "CLI component substitution",
+            cli.MailCloudApplication is service.MailCloudApplication, "CLI application substitution"
         )
-    journal = importlib.import_module("hermes_mailcloud.journal")
-    for module in ("hermes_mailcloud.commands.public", "hermes_mailcloud.batch"):
-        require(
-            importlib.import_module(module).LinkJournal is journal.LinkJournal,
-            "journal component substitution",
-        )
+        for name, module in (
+            ("BatchCommands", "hermes_mailcloud.batch"),
+            ("PublicCommands", "hermes_mailcloud.commands.public"),
+            ("TransferCommands", "hermes_mailcloud.commands.transfer"),
+            ("MkdirCommand", "hermes_mailcloud.commands.mkdir"),
+            ("MoveCopyCommands", "hermes_mailcloud.commands.move_copy"),
+            ("RemoveCommand", "hermes_mailcloud.commands.remove"),
+        ):
+            require(
+                getattr(cli, name) is getattr(importlib.import_module(module), name),
+                "legacy CLI component substitution",
+            )
+        journal = importlib.import_module("hermes_mailcloud.journal")
+        for module in ("hermes_mailcloud.commands.public", "hermes_mailcloud.batch"):
+            require(
+                importlib.import_module(module).LinkJournal is journal.LinkJournal,
+                "journal component substitution",
+            )
     installed = {
         item.metadata["Name"].lower().replace("_", "-"): item.version
         for item in importlib.metadata.distributions()
@@ -174,26 +207,32 @@ def backend(control: dict, arguments: list[str]) -> int:
     return 0
 
 
-def cli_run(control: dict, control_path: Path, arguments: list[str]) -> None:
-    import hermes_mailcloud.cli as cli
+def executable_runner(control_path: Path, **kwargs):
     from hermes_mailcloud.rclone.runner import RcloneRunner
 
-    class ExecutablePrefixRunner(RcloneRunner):
-        def __init__(self, binary="rclone", **kwargs):
-            super().__init__(
-                (
-                    sys.executable,
-                    "-I",
-                    "-X",
-                    "utf8",
-                    str(Path(__file__).resolve()),
-                    "backend",
-                    str(control_path),
-                ),
-                **kwargs,
-            )
+    return RcloneRunner(
+        (
+            sys.executable,
+            "-I",
+            "-X",
+            "utf8",
+            str(Path(__file__).resolve()),
+            "backend",
+            str(control_path),
+        ),
+        **kwargs,
+    )
 
-    cli.RcloneRunner = ExecutablePrefixRunner
+
+def cli_run(control: dict, control_path: Path, arguments: list[str]) -> None:
+    import hermes_mailcloud.cli as cli
+    from hermes_mailcloud.application import composition
+
+    # S1 migration only: both seams create the actual installed runner.
+    cli.RcloneRunner = lambda binary="rclone", **kwargs: executable_runner(control_path, **kwargs)
+    composition.create_backend = lambda config, *, environment: executable_runner(
+        control_path, environment=environment
+    )
     sys.argv = ["hermes-mailcloud", *arguments]
     try:
         cli.app()
@@ -204,12 +243,72 @@ def cli_run(control: dict, control_path: Path, arguments: list[str]) -> None:
         )
 
 
+def api_run(control: dict, control_path: Path) -> None:
+    class NoCliSdk(importlib.abc.MetaPathFinder):
+        def find_spec(self, fullname, path=None, target=None):
+            if (
+                fullname.split(".")[0] in {"typer", "click", "rich", "PySide6", "mcp"}
+                or fullname == "hermes_mailcloud.cli"
+            ):
+                raise RuntimeError("direct API imported a CLI SDK")
+
+    require("hermes_mailcloud.cli" not in sys.modules, "CLI was pre-imported")
+    sys.meta_path.insert(0, NoCliSdk())
+    # This checks the runtime boundary before its first product import and never
+    # imports CLI components. Full provenance runs in a separate probe process.
+    installed_provenance(control, api_only=True)
+    from hermes_mailcloud.application import MailCloudApplication, composition
+
+    composition.create_backend = lambda config, *, environment: executable_runner(
+        control_path, environment=environment
+    )
+    output, diagnostics = io.StringIO(), io.StringIO()
+    with contextlib.redirect_stdout(output), contextlib.redirect_stderr(diagnostics):
+        application = MailCloudApplication()
+        results = {
+            "version": application.version(),
+            "ls": application.ls("/Hermes"),
+            "stat": application.stat(control["api_stat_path"]),
+            "refusal": application.ls("/Hermes", recursive=1),
+            "failure": application.stat("/Hermes/private/api-failure"),
+            "after_failure": application.ls("/Hermes"),
+        }
+    require(not output.getvalue() and not diagnostics.getvalue(), "direct API wrote output")
+    require(
+        not any(name.split(".")[0] in {"typer", "click", "rich"} for name in sys.modules),
+        "CLI SDK was loaded",
+    )
+    require("hermes_mailcloud.cli" not in sys.modules, "direct API loaded CLI")
+    require(
+        all(
+            PUBLIC_URL not in repr(value) and DIAGNOSTIC not in repr(value)
+            for value in results.values()
+        ),
+        "unsafe direct data",
+    )
+    provenance = installed_provenance(control, api_only=True)
+    print(
+        json.dumps(
+            {
+                "payloads": {name: value.to_payload() for name, value in results.items()},
+                "exits": {name: value.exit_code for name, value in results.items()},
+                "provenance": provenance,
+                "cli_sdk_imported": False,
+                "application_output": False,
+            }
+        )
+    )
+
+
 def main() -> int:
     mode, filename, *arguments = sys.argv[1:]
     path = Path(filename).resolve()
     control = json.loads(path.read_text(encoding="utf-8"))
     if mode == "backend":
         return backend(control, arguments)
+    if mode == "api":
+        api_run(control, path)
+        return 0
     provenance = installed_provenance(control)
     if mode == "probe":
         print(json.dumps(provenance))

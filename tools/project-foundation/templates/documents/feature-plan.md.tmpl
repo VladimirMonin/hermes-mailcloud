@@ -1,0 +1,48 @@
+---
+id: "{{document_id}}"
+title: "{{feature_title}} — план"
+kind: plan
+status: proposed
+created: "{{date}}"
+updated: "{{date}}"
+areas: ["{{area}}"]
+summary: "{{user_result_and_bounded_implementation}}"
+---
+
+> Автору: нужна для существенной функции/нескольких связанных срезов; малый фикс не требует этой формы. Основа — [planning](../instructions/planning.md.tmpl). Заполнить ближайшие срезы до исполнимости, дальние — до результата/зависимости. Удалить подсказку и неприменимые блоки. Принятый план не выполненная функция.
+
+## Результат и существующая основа
+
+Пользователь/ценность и сценарий: {{user_scenario_reference}}.
+Наблюдаемые критерии: {{acceptance_criteria}}.
+Current база/owners/потребители/evidence: {{current_base_and_mechanism}}.
+Конкретный gap, границы и non-goals: {{gap_scope_non_goals}}.
+Выбранное минимальное решение/основание: {{chosen_solution_and_authority}}.
+
+## Контракт и переход
+
+{{needed_contract_delta_effects_errors_and_units}}
+Совместимость/миграция/сохранность: {{applicable_transition_or_reason_not_needed}}.
+Текущее и предлагаемое различаются; новые имена — предложенные до реализации.
+
+## Связные срезы
+
+```mermaid
+flowchart LR
+    A[Нужная граница определена] --> B[Первый реальный consumer и проверка]
+    B --> C[Остальной необходимый охват и общая приёмка]
+```
+
+Стрелки — зависимости результатов, не обязательные слои/агенты/коммиты. Адаптировать к действительным зависимостям.
+
+| Срез/результат | Необходимый вход | Owner и scope | Инвариант/проверка |
+|---|---|---|---|
+| {{first_slice_result}} | {{dependency}} | {{real_owner_and_paths}} | {{evidence_and_invariant}} |
+
+## Доказательство, знания и Done
+
+Проверки настоящего заявленного пути, уровень/подмены/ограничения: {{verification_plan}}.
+Затронутые docs/instructions/scenarios/guides/translations: {{knowledge_delta_or_justified_none}}.
+Трекер/интеграция/права и конечный результат всей задачи: {{tracker_integration_done}}.
+Открытые решения: {{material_unknowns_and_narrow_resolution_or_remove_section}}.
+Авторский результат, независимое принятие, сохранение и выпуск будут отмечены отдельно по факту, не предзаполнены PASS.

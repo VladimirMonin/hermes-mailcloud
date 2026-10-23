@@ -1,0 +1,36 @@
+---
+id: "{{document_id}}"
+title: "{{bounded_question_title}}"
+kind: research
+status: draft
+created: "{{date}}"
+updated: "{{date}}"
+areas: ["{{area}}"]
+summary: "{{question_answer_and_uncertainty}}"
+---
+
+> Автору: исследование/эксперимент с конечным вопросом. Компактный ответ можно оставить в задаче. Не использовать как неограниченный аудит. Удалить подсказку и пустые необязательные секции.
+
+## Вопрос и остановка
+
+Какой ответ меняет решение: {{decision_question}}.
+Достаточный ответ/условие прекращения: {{answer_criterion_and_stop}}.
+База, доступные источники, разрешённый scope и исключения: {{base_sources_scope}}.
+Предел времени/объёма/внешних ресурсов: {{bounds}}.
+
+## Наблюдения
+
+| Наблюдение или гипотеза | Точное основание | Уверенность/ограничение | Влияние на решение |
+|---|---|---|---|
+| {{observation}} | {{source_or_executed_check}} | {{limit}} | {{decision_impact}} |
+
+Не найдено только в {{searched_scope_and_freshness}}, не «отсутствует вообще».
+Схема пути при необходимости: {{diagram_or_parent_link_or_remove_line}}.
+
+## Ответ и судьба эксперимента
+
+{{answer_including_valid_negative_result}}
+Что остаётся неизвестным и мешает ли следующему шагу: {{material_unknowns}}.
+Экспериментальный код/данные: {{remove_owned_disposable_or_keep_outside_product_or_separate_adoption_decision}}.
+Следующий конечный шаг и владелец: {{next_action}}.
+Написанный эксперимент не становится принятой функцией; статическое наблюдение не выдаётся за выполненный пользовательский сценарий.

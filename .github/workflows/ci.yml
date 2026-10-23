@@ -86,8 +86,13 @@ jobs:
           with Path(os.environ["GITHUB_ENV"]).open("a", encoding="utf-8") as output:
               for key, value in values.items():
                   output.write(f"{key}={value}\n")
-      # These four packs are disjoint and cover every test module. A packaging
+      # These five packs are disjoint and cover every test module. A packaging
       # control rejects omissions/overlaps; all live-marked items stay deselected.
+      - name: Offline application API pack
+        timeout-minutes: 2
+        run: >-
+          uv run --no-sync --offline python -m pytest -q -ra tests/application
+          -m "not live" -p no:cacheprovider --basetemp "${{ runner.temp }}/hmc-pytest-application"
       - name: Offline core, CLI and packaging controls
         timeout-minutes: 2
         run: >-

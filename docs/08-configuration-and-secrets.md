@@ -70,7 +70,10 @@ hermes-mailcloud --remote mailru: --json doctor
 TOML с профилями HMC, второй — отдельное backend-хранилище rclone. Переменная
 `RCLONE_CONFIG` передаётся в среде вызывающего процесса и сохраняется в узкой среде
 backend. Вызов CLI должен также выбрать соответствующий существующий `--profile`;
-без него выбирается default, который может не описывать нужное подключение.
+в текущем source-built CLI при его отсутствии используется `HMC_PROFILE`, иначе
+`default`, который может не описывать нужное подключение. Явный `--profile default`
+сильнее env. Для прежнего pinned release wheel используйте явный выбор профиля,
+не предполагая наличие новой application-границы по одной строке версии.
 
 Fictitious paths, no secrets (профиль `work` должен уже существовать в HMC-файле):
 
@@ -176,6 +179,16 @@ hermes-mailcloud --profile work --remote mailru-test: doctor --json
 ```
 
 `--remote` переопределяет remote из профиля.
+
+Для текущего прямого `version/ls/stat` API явные поля задаются через
+`CallOptions(config=ConfigOverrides(profile=..., remote=..., config_path=...))`;
+`config_path` — `Path`. Эти overrides занимают то же место, что CLI-флаги.
+`CliConfigOverrides` сохранён как alias, прежний `resolve_config(cli=...)` callable
+не удалён. При пропущенном profile используется `HMC_PROFILE`, затем `default`;
+`version` выбирает имя без чтения TOML. Экземпляр application копирует environment
+при создании, но перечитывает config для каждого read-вызова. Чтобы применить новую
+среду, создайте новый экземпляр; это не sandbox для process home expansion.
+Подробнее: [поддерживаемый API](01-architecture.md#current-in-process-application-interface).
 
 Для executable порядок: explicit `HMC_RCLONE_PATH` → explicit profile
 `rclone_path` → внешний `rclone` в supplied PATH → проверенная managed copy.

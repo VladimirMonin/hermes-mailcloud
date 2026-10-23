@@ -1,0 +1,57 @@
+# Form: archive / replacement frame
+
+Use to withdraw or replace knowledge without losing origin/obligations. Default:
+`docs/archive/<topic>.md` or a frame around an immutable external/history item.
+Copy payload only; [metadata](../../references/metadata.md) is authoritative. Essential:
+origin, historical scope, reason, replacement or explicit none, residual obligations.
+For a whole replaced authored document, keep its ID/status at its existing address
+as appropriate; this frame has its own ID if preserving an independent snapshot.
+Set `snapshot_of` only for a known original ID. Remove irrelevant optional fields.
+A new replacement declares `supersedes: [old-id]`; reciprocal human links must agree.
+Do not edit immutable evidence or interpret archival as deletion authority.
+
+## Payload
+
+````markdown
+---
+id: "{{project_id}}-ARCHIVE-{{unique_frame_id}}"
+title: "{{historical_subject}} — archival frame"
+kind: snapshot
+status: archived
+created: "{{frame_created_iso_date}}"
+updated: "{{frame_updated_iso_date}}"
+areas: ["{{subject_area}}", history]
+summary: "{{origin_historical_scope_and_replacement_limit}}"
+---
+
+# {{historical_subject}} — history, not current instruction
+
+## Origin and boundary
+
+{{original_path_revision_period_authority_and_accessible_source_link}}
+{{what_was_preserved_and_original_dates_unknown_if_so}}
+{{known_immutable_item_unchanged_or_deliberately_labeled_snapshot_transform}}
+
+## Why retired / replaced
+
+{{reason_not_age_alone_and_exact_scope_no_longer_active}}
+{{ordinary_relative_link_to_current_owner_or_explicit_no_replacement}}
+{{do_not_apply_old_commands_or_PASS_to_current_artifacts}}
+
+For a significant intentional component removal, retain the rationale and current
+responsibility owner above. Conditions for reconsideration (only if relevant):
+{{removal_revisit_conditions_or_remove_this_paragraph}}.
+This is part of existing history, not a second deletion registry.
+
+## Remaining obligations
+
+{{unique_decisions_unresolved_actions_and_their_current_owner_tracker_links}}
+{{or_specific_grounded_statement_that_no_open_obligation_was_found_in_scope}}
+
+## Preserved material
+
+{{link_to_original_or_clearly_bounded_inert_historical_content}}
+
+Archiving this text does not authorize deletion of source, user data or evidence.
+Current entry routes point to the replacement; historical links retain their period.
+````

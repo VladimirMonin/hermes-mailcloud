@@ -2,6 +2,78 @@
 
 <!-- hmc-json-example-default: non-contract -->
 
+## Current in-process application interface
+
+Этот раздел описывает текущие исходники и собранные из них пакеты, а не прежний
+immutable release wheel `v0.1.0`. Одинаковое значение версии пакета не доказывает
+одинаковый состав артефакта. Канон Python-контракта —
+[`application/service.py`](../src/hermes_mailcloud/application/service.py) и
+[`application/contracts.py`](../src/hermes_mailcloud/application/contracts.py),
+не отдельная HTTP/JSON-схема или реестр команд.
+
+Поддерживаемый вход `hermes_mailcloud.application` предоставляет
+`MailCloudApplication.version`, `ls` и `stat`. Это синхронные вызовы в процессе
+потребителя; HTTP-сервера, GUI/MCP, общей живой сессии или фоновых jobs нет.
+Текущие CLI handlers этих трёх команд только переводят аргументы, вызывают этот
+API, выводят envelope и применяют exit code:
+
+```text
+Python consumer ───────┐
+CLI version/ls/stat ───┴→ MailCloudApplication
+                          → config/composition → ReadCommands → runner/parser
+                          → safe ResultEnvelope → consumer/output adapter
+```
+
+Стрелки обозначают вызов и передачу результата. Остальные поставляемые CLI-команды
+сохраняют прежнюю оркестрацию в `cli.py`; это не альтернативный fallback для трёх
+перенесённых методов. Внутренние command services не объявляются вторым публичным
+SDK. Полный переход остаётся в [предлагаемом плане](plans/command-first-refactor.md).
+
+Пример для Python-окружения с этим source-built пакетом и выбранным подключением:
+
+```python
+from hermes_mailcloud.application import CallOptions, MailCloudApplication
+
+application = MailCloudApplication()
+response = application.ls(
+    "/Hermes", options=CallOptions(timeout_seconds=30, retries=0)
+)
+payload = response.to_payload()
+exit_code = response.exit_code
+```
+
+API сам ничего не печатает и не требует Typer/Click/Rich. Он возвращает существующий
+`ResultEnvelope`: `operation`, result либо typed error, прежний exit code и
+санитизированные прямые данные, а не только безопасный `to_json()`. Ожидаемые ошибки
+сохраняют `ErrorKind`; неожиданное `Exception` даёт безопасный `unknown_error`/1 без
+exception content и обещания отсутствия эффекта. Ошибка Python-арности/неизвестного
+keyword остаётся `TypeError`; `BaseException` не превращается в успех.
+
+Конструктор только копирует environment и сохраняет доверенные зависимости.
+`version` не читает config и не создаёт backend. На каждом read-вызове config и
+runner собираются заново; изменения файла настроек видны следующему вызову,
+изменения environment — новому экземпляру. Последний результат/runner не кешируются.
+DI — seam доверенного хоста, не sandbox; `Path.home()`/`expanduser()` могут учитывать
+process home, поэтому передача environment не заменяет раннюю изоляцию теста.
+
+`CallOptions` содержит `config=ConfigOverrides()`, `trace_id`, `dry_run=False`,
+`yes=False`, `timeout_seconds=None` и `retries=None`. `None` означает отсутствие
+runtime override, а `retries=0` — явный нулевой бюджет. Нужны настоящие boolean и
+целые timeout/retries без bool/float/строк; неверные типы отклоняются до config.
+Типы путей операции — строки; нормализация, policy, parser и безопасные read retries
+остаются у существующих owners. `ls` принимает `recursive`, `files_only`,
+`dirs_only`; file/directory `stat` сохраняет доступные metadata/hashes.
+`dry_run=True` не отменяет standalone read-вызов backend.
+
+`ConfigOverrides` — нейтральное имя прежних profile/remote/config_path overrides;
+`CliConfigOverrides` остаётся совместимым alias. Precedence и отдельный
+`RCLONE_CONFIG` описаны в [конфигурации](08-configuration-and-secrets.md#5-приоритет-настроек-).
+Повторная безопасная проекция идемпотентна; маркер redaction не даёт права пропустить
+секрет рядом с ним. Schemas, publication/confirmation/journal и write-once правила
+не расширены новой read-границей.
+
+## Historical architecture proposals
+
 > [!important]
 > **Contract freeze (2026-07-24):** the v0.1 public command set is `doctor`,
 > `ls`, `stat`, `mkdir`, `upload`, `download`, `mv`, `cp`, `rm`, `publish`,

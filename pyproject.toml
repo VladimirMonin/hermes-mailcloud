@@ -46,6 +46,7 @@ package = true
 target-version = "py312"
 line-length = 100
 src = ["src", "tests"]
+extend-exclude = ["tools/project-foundation"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "C4"]

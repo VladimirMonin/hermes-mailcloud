@@ -1,0 +1,33 @@
+---
+id: "{{document_id}}"
+title: "{{user_result_title}}"
+kind: scenario
+status: draft
+created: "{{date}}"
+updated: "{{date}}"
+areas: ["{{area}}"]
+summary: "{{actor_goal_and_value}}"
+---
+
+> Автору: короткая форма потребности; для малого изменения может быть секцией задачи без собственного файла/паспорта. Для сложных переходов использовать [scenario](scenario.md.tmpl). Удалить подсказку, ненужные секции и пересчитать связи.
+
+## Потребность
+
+Как {{actor}}, хочу {{observable_result}}, чтобы {{value}}.
+Основа: {{existing_capability_or_observed_gap}}.
+Граница: {{scope_and_non_goals}}.
+
+## Условия и критерии
+
+- При {{precondition_and_action}} получается {{observable_success}}.
+- При {{important_failure}} сохраняется {{invariant_and_next_action}}.
+
+Применимый вход и ограничения: {{actual_interface_and_limits}}.
+Это {{requirement_or_proposal}}; наличие истории не означает реализованную функцию.
+
+## Передача
+
+Задача/трекер: {{task_reference}}.
+Существующий owner/контракт: {{owner_reference}}.
+Нужная проверка: {{sufficient_evidence}}.
+Дальнейшая подготовка: {{next_action_or_ready_state}}.

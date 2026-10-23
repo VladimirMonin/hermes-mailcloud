@@ -22,7 +22,8 @@ SENSITIVE_ASSIGNMENT_PATTERN = re.compile(
     (?P<value>
         \"(?:\\.|[^\"\\])*\"
         | '(?:\\.|[^'\\])*'
-        | [^\s,;}}\]]+
+        # A marker is one value unit, never a reason to trust an adjacent suffix.
+        | (?: \[REDACTED\] | [^\s,;}}\]] )+
     )
     """
 )

@@ -1,0 +1,42 @@
+---
+id: "{{document_id}}"
+title: "{{interface_name}} — контракт"
+kind: contract
+status: draft
+created: "{{date}}"
+updated: "{{date}}"
+areas: ["{{area}}"]
+summary: "{{behavior_errors_and_compatibility}}"
+---
+
+> Автору: действующая или предлагаемая значимая граница. Точная схема остаётся у исполняемого owner-а; не создавать второй вручную редактируемый реестр. Удалить неприменимые строки и подсказку. Схема паспорта — [metadata](../../references/metadata.md).
+
+## Область и источник
+
+Состояние current/proposed и реальная база: {{state_base_and_scope}}.
+Provider/потребители/один канонический источник (включая code-first): {{owner_consumers_schema}}.
+Проверенная редакция канона и способ её проверки: {{verified_canonical_revision_and_check}}.
+Основной сценарий: {{scenario_reference}}.
+
+## Наблюдаемые обязательства
+
+| Предмет | Семантика |
+|---|---|
+| Вход | {{types_required_ranges_units_defaults}} |
+| Особые значения | {{absent_null_empty_zero_false_semantics}} |
+| Результат | {{accepted_completed_persisted_partial_meanings}} |
+| Ошибки | {{errors_visibility_retry_rules}} |
+| Эффекты и допуск | {{side_effects_and_rejection_boundary}} |
+| Совместимость | {{real_consumers_data_and_transition}} |
+
+Идентичность/отмена/повтор/поздний ответ/ресурсы (когда применимо): {{lifecycle_or_remove_section}}.
+Наблюдаемость и privacy: {{useful_safe_facts}}.
+Схема пути/границы: [основная схема]({{diagram_path}}).
+
+## Проверка и изменение
+
+Пример входа/исхода на безопасных синтетических данных: {{example_with_explicit_status}}.
+Существенные положительные/ошибочные критерии: {{contract_checks}}.
+Настоящий serialized output и соединённый consumer/provider путь: {{serialized_and_connected_path_evidence_or_not_run}}.
+Не заявляется: {{verification_limits}}.
+Изменение требует синхронизации owner instruction, потребителей, справки/руководств и связанных переводов по impact; соответствующее поведение не легализуется только редактурой этого текста.

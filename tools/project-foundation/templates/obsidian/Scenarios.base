@@ -1,0 +1,33 @@
+filters:
+  and:
+    - 'file.ext == "md"'
+    - 'file.inFolder("scenarios")'
+    - 'file.hasProperty("id")'
+    - 'note.kind == "scenario"'
+    - '["draft", "proposed", "accepted"].contains(note.status)'
+    - not:
+        - 'file.inFolder("_templates")'
+        - 'file.inFolder("archive")'
+        - 'file.inFolder("_work")'
+properties:
+  note.status:
+    displayName: Text status, not implementation
+views:
+  - type: table
+    name: Scenarios
+    order:
+      - file.name
+      - note.id
+      - note.status
+      - note.areas
+      - note.summary
+      - note.issue_refs
+      - note.related
+  - type: table
+    name: Accepted scenarios
+    filters: 'note.status == "accepted"'
+    order:
+      - file.name
+      - note.summary
+      - note.verification_scope
+      - note.review_note

@@ -1,0 +1,70 @@
+filters:
+  and:
+    - 'file.ext == "md"'
+    - 'file.hasProperty("id")'
+    - '["draft", "proposed", "accepted"].contains(note.status)'
+    - '["philosophy", "engineering_policy", "instruction", "architecture", "contract", "reference", "scenario", "proposal", "plan", "decision", "research", "guide", "navigation"].contains(note.kind)'
+    - not:
+        - 'file.inFolder("_templates")'
+        - 'file.inFolder("archive")'
+        - 'file.inFolder("_work")'
+        - 'file.inFolder("assets")'
+        - 'file.inFolder("views")'
+    - or:
+        - 'file.folder == ""'
+        - 'file.inFolder("foundation")'
+        - 'file.inFolder("instructions")'
+        - 'file.inFolder("architecture")'
+        - 'file.inFolder("scenarios")'
+        - 'file.inFolder("decisions")'
+        - 'file.inFolder("plans")'
+        - 'file.inFolder("research")'
+        - 'file.inFolder("guides")'
+properties:
+  note.id:
+    displayName: ID
+  note.kind:
+    displayName: Kind
+  note.status:
+    displayName: Text status
+  note.updated:
+    displayName: Editorial update
+  note.review_note:
+    displayName: Known limitation
+views:
+  - type: table
+    name: Working knowledge
+    order:
+      - file.name
+      - note.id
+      - note.kind
+      - note.status
+      - note.areas
+      - note.summary
+      - note.review_note
+  - type: table
+    name: Accepted architecture
+    filters:
+      and:
+        - 'file.inFolder("architecture")'
+        - 'note.kind == "architecture"'
+        - 'note.status == "accepted"'
+    order:
+      - file.name
+      - note.id
+      - note.summary
+      - note.code_ref
+      - note.verification_scope
+      - note.review_note
+  - type: table
+    name: Instructions
+    filters:
+      and:
+        - 'file.inFolder("instructions")'
+        - 'note.kind == "instruction"'
+    order:
+      - file.name
+      - note.id
+      - note.status
+      - note.read_when
+      - note.owner

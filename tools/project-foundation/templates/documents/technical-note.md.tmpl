@@ -1,0 +1,42 @@
+# Form: technical note
+
+Use for reusable bounded technical knowledge, not transient progress or a replacement
+for an authoritative contract. Default output: `docs/research/<topic>.md`. Copy only
+payload with [metadata](../../references/metadata.md). Question, grounded findings,
+applicability and conclusion are essential; remove unused alternatives/experiments.
+An unknown remains explicit, not accepted architecture. For an actual experiment use
+[research form](research.md.tmpl); for a behavior boundary use
+[interface contract](interface-contract.md.tmpl).
+
+## Payload
+
+````markdown
+---
+id: "{{project_id}}-NOTE-{{unique_id}}"
+title: "{{technical_question}}"
+kind: research
+status: draft
+created: "{{created_iso_date}}"
+updated: "{{updated_iso_date}}"
+areas: ["{{subject_area}}"]
+summary: "{{useful_finding_and_applicability_limit}}"
+---
+
+# {{technical_question}}
+
+## Question and boundary
+
+{{why_the_answer_is_needed_and_what_is_not_being_investigated}}
+
+## Sources and findings
+
+{{actual_owner_symbols_or_primary_external_sources_with_version}}
+{{fact_vs_inference_vs_unresolved_assumption}}
+{{small_verified_example_or_clearly_labeled_illustration_if_needed}}
+
+## Applicability and conclusion
+
+{{what_this_changes_or_explains_for_the_project}}
+{{what_is_not_proved_and_when_the_finding_expires}}
+{{decision_or_next_bounded_action_owner_and_links}}
+````

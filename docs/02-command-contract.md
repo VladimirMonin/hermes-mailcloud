@@ -61,7 +61,7 @@ hermes-mailcloud publish ./report.pdf /Hermes/public/report.pdf --json --yes
 
 | Флаг | Тип | По умолчанию | Назначение |
 |---|---|---|---|
-| `--profile` | text | `default` | профиль конфигурации |
+| `--profile` | text | `HMC_PROFILE`, иначе `default` | профиль конфигурации |
 | `--remote` | text | из конфига | rclone remote, например `mailru:` |
 | `--config` | path | auto | путь к конфигу `hermes-mailcloud` |
 | `--json` | bool | false | машинный JSON-вывод |
@@ -76,6 +76,12 @@ hermes-mailcloud publish ./report.pdf /Hermes/public/report.pdf --json --yes
 | `--no-color` | bool | false | отключить ANSI-цвета |
 
 ---
+
+В текущих source-built пакетах пропущенный `--profile` не перекрывает
+`HMC_PROFILE`; явный `--profile default` имеет приоритет над env. Это относится
+также к metadata `version` без чтения config. Старый pinned release wheel не
+получает исправление только от совпадения строки версии; для него выбирайте
+нужное подключение явным флагом.
 
 ## 3.1. Команда `version`
 
@@ -128,6 +134,18 @@ packaged pins, не произвольный URL. `--dry-run` не скачив�
 поскольку процесс не запускается. Ошибки используют прежние kinds/exit codes,
 включая `rclone_not_found` для отсутствующего explicit executable. Read-only
 `doctor` только сообщает readiness/следующий шаг, но не устанавливает зависимость.
+
+---
+
+## 3.3. Внутренний Python-вход
+
+В текущих исходниках CLI `version`, `ls`, `stat` делегируют
+`hermes_mailcloud.application.MailCloudApplication`. Прямые вызовы возвращают тот
+же безопасный `ResultEnvelope`, а не запускают CLI или HTTP-сервер. Только эти три
+метода доступны через поддерживаемую application-поверхность; остальные CLI-команды
+продолжают работать прежним путём. Входы/defaults, пример и границы поставки — в
+[текущей архитектуре](01-architecture.md#current-in-process-application-interface).
+Нормативный JSON-контракт ниже не заменён отдельной схемой Python API.
 
 ---
 

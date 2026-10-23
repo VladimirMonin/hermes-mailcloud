@@ -130,7 +130,19 @@ roots and leaves existing cloud data metadata/list-only.
 Hermes Agent → hermes-mailcloud CLI → policy + JSON contract → rclone subprocess → Mail.ru Cloud
 ```
 
-See `docs/01-architecture.md` and `docs/03-development-plan.md` for the full plan.
+Current source-built packages also expose a synchronous, in-process Python entry:
+`hermes_mailcloud.application.MailCloudApplication`, with **only `version`, `ls`
+and `stat`**. These CLI handlers use the same application owner; other commands
+retain their existing path. This is an internal callable boundary, not an HTTP
+service. It returns a safe typed envelope without printing or requiring Typer.
+See the [application interface and example](docs/01-architecture.md#current-in-process-application-interface).
+
+The immutable `v0.1.0` release wheel above predates this boundary; the unchanged
+package version alone does not identify a source-built candidate. The remaining
+migration is [proposed separately](docs/plans/command-first-refactor.md), not an
+already available API. Historical architecture options remain in
+[`docs/01-architecture.md`](docs/01-architecture.md) and
+[`docs/03-development-plan.md`](docs/03-development-plan.md).
 
 ## Repository privacy
 

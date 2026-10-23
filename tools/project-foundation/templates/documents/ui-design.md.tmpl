@@ -1,0 +1,52 @@
+---
+id: "{{document_id}}"
+title: "{{surface_name}} — проект интерфейса"
+kind: plan
+status: draft
+created: "{{date}}"
+updated: "{{date}}"
+areas: [ui]
+summary: "{{user_result_and_bounded_design_scope}}"
+---
+
+> Автору: необязательная форма самостоятельного долговечного решения; малой задаче
+> достаточно раздела существующего плана. Статус текста не готовность UI. Заполнить
+> существенные поля, удалить неприменимое и рамку, пересчитать ссылки от результата.
+> Метод: [pf-ui-design](../../skills/pf-ui-design/SKILL.md); свидетельства — существующая
+> [verification-форма](verification.md.tmpl), не второй UI-registry.
+
+## Задача и граница
+
+{{user_job_primary_action_and_link_to_source_requirement}}
+{{current_vs_proposed_behavior_and_design_implementation_or_review_mode}}
+{{platform_surface_owner_constraints_and_non_goals}}
+
+## Принятое окружение
+
+{{existing_components_tokens_and_ui_rules}}
+{{operation_or_data_contract_reference_without_schema_duplication}}
+{{target_window_or_viewport_conditions_and_reason}}
+
+## Решение
+
+{{information_hierarchy_layout_and_reason}}
+{{content_density_long_labels_focus_keyboard_and_applicable_accessibility}}
+
+| Состояние / переход | Триггер | Обратная связь | Безопасное действие |
+|---|---|---|---|
+| {{relevant_state}} | {{trigger}} | {{visible_result}} | {{next_action}} |
+
+{{cancellation_retry_stale_result_and_existing_owner_only_when_applicable}}
+{{inapplicable_states_reason_distinct_from_unavailable_test_access}}
+
+## Проверяемые критерии и наблюдения
+
+{{bounded_behavior_rendered_interaction_source_and_native_or_browser_checks}}
+{{existing_check_commands_or_explicitly_unknown_not_invented}}
+{{actual_artifact_revision_conditions_observations_or_not_run_limits}}
+
+## Внедрение и знания
+
+{{authorized_ui_change_scope_and_contract_dependencies}}
+{{affected_guides_or_no_guide_impact_reason}}
+{{remaining_decision_owner_local_acceptance_policy_or_finished_scope}}

@@ -1,5 +1,34 @@
 # 06. Testing Strategy: стратегия тестирования hermes-mailcloud 🧪
 
+## Действующие основания проверки
+
+Эта страница остаётся единственным владельцем стратегии тестирования. Практический
+порядок и команды — в [инструкции тестирования](../instructions/TEST.quality_gates.instructions.md),
+политика диагностических данных — в [основах наблюдаемости](foundation/observability-policy.md).
+Методика адаптирована из полного [Project Foundation Kit](../tools/project-foundation/README.md);
+исторические планы ниже не становятся перечнем реализованных тестов.
+
+Проверяем обещанное поведение, а не количество классов или процент покрытия.
+Для command-first-перехода нужны два соединённых пути: прямой вызов настоящего
+прикладного API без Typer и вызов того же владельца через настоящий CLI.
+Текущий поддерживаемый API ограничен `version/ls/stat`; его connected проверки
+находятся в `tests/application/`. Наличие этого пакета не доказывает перенос
+остальных операций из [полного плана](plans/command-first-refactor.md).
+Внешний rclone/облако можно заменять; сам проверяемый прикладной сценарий — нельзя.
+Результаты, коды ошибок, сохранность файла/журнала, отказ до эффекта, отсутствие
+повторной записи и возможность следующей операции важнее одного `mock.called`.
+
+Изоляция устанавливается до импорта/collection: синтетические HOME/config,
+RCLONE_CONFIG, журнал, backend и временные каталоги; подходящий образец — в
+[CI](../.github/workflows/ci.yml). Очистка нужна и после частичного setup.
+Не читаем рабочие credentials и не обращаемся к реальному remote ради обычного теста.
+
+Полный offline-набор обоснован общим переносом границы приложения; проверка чистого
+wheel/launcher нужна для изменённого поставляемого входа. Авторские проверки и
+независимая приёмка разделяются. NOT_RUN, skip и выполненный отрицательный случай
+имеют разный смысл. Новая правка fixture/serializer/артефакта требует затронутой
+перепроверки; неизменённые доказательства используются только в их исходной области.
+
 <!-- hmc-json-example-default: non-contract -->
 
 > [!important]
@@ -295,7 +324,7 @@ Probe можно запускать до написания основного C
 
 [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) задаёт Ubuntu/Windows ×
 Python 3.12/3.13. Lock/Ruff выполняются отдельно; каждая runtime cell делает locked
-dev sync, offline pytest четырьмя непересекающимися packs (core/CLI/packaging,
+dev sync, offline pytest непересекающимися packs (application, core/CLI/packaging,
 commands/batch, journal, parser/process), build wheel и sdist, runtime-only locked
 export и clean installed smoke. Packaging control проверяет полноту module cover.
 Эквивалентные основные gates (pytest в CI разделён на packs):
@@ -315,6 +344,13 @@ launcher выполняет `--help`, `version`, JSON version и read-only JSON 
 injection. Отдельный test-only argv driver использует настоящие установленные
 file/public/batch/journal components для success, safety/preflight отказов,
 zero-backend dry-run, redaction, backend failure и partial batch stop/continue.
+Прямой installed API проверяется отдельным процессом с блокировкой CLI SDK до
+первого product import: version/read/refusal/failure и следующий успешный вызов.
+Полный CLI provenance выполняется отдельно; подменяется только executable argv,
+не application, config resolver, read service или parser. Payload/exit/schema
+API и CLI сравниваются без нормализации synthetic identical-input результата.
+Idempotence повторной redaction и отсутствие marker-bypass проверяются также
+через реальные envelope consumers, включая partial batch.
 Schema validation выполняет dev-контроллер; `jsonschema` и другие dev packages
 не устанавливаются в чистый runtime.
 

@@ -1,0 +1,87 @@
+# Form: user task guide, primary and translation
+
+Use for a real user task missing from the existing guide. Default new-project
+output: `docs/guides/<language>/<task>.md`; preserve existing guide addresses.
+Read [guide procedure](../instructions/guides.md.tmpl) and
+[metadata/revision rules](../../references/metadata.md). Copy only payload below,
+fill agent placeholders and output-relative links. Not a ready product example.
+
+Essential: result, supported scope/prerequisites, steps, observable success,
+important failure/next action and restrictions. Remove unused image/term/link
+sections rather than mandatory N/A. Reuse an adequate [glossary](glossary.md.tmpl).
+The primary language is chosen by the project profile, not forced to English/Russian.
+This same form supports getting started, how-to, reference and troubleshooting.
+
+## Language adaptation
+
+- Primary: keep `source_revision: "r1"`, choose `language`, unique ID including language.
+- Translation: use a **different** ID/language; replace `source_revision` with
+  `translation_source: "{{primary_document_id}}"`,
+  `translation_source_revision: "{{actually_reviewed_primary_edition}}"`, and
+  `translation_state: unknown`. Change state to current only after substantive review
+  of the same primary edition; mismatch is outdated. Do not invent a second primary.
+- For a pair add `related: ["{{other_language_document_id}}"]` to both headers and
+  reciprocal ordinary relative links in their bodies. Without a pair omit that optional
+  field/section. Keep primary/release owners real roles; no model/session identities.
+- A stale translation keeps its old checked revision and visible warning/current-source
+  link. Required translations are reconciled by the assigned author before the release
+  owner claims that language ready. Equal dates do not establish this.
+
+## Payload
+
+````markdown
+---
+id: "{{project_id}}-GUIDE-{{task_id}}-{{language_id}}"
+title: "{{user_task_title}}"
+kind: guide
+status: draft
+created: "{{created_iso_date}}"
+updated: "{{updated_iso_date}}"
+areas: [guides, "{{subject_area}}"]
+summary: "{{user_result_and_supported_scope}}"
+language: "{{language}}"
+source_revision: "r1"
+owner: "{{guide_owner_role}}"
+release_owner: "{{release_owner_role}}"
+---
+
+# {{user_task_title}}
+
+## Result
+
+{{what_the_user_will_obtain_and_where}}
+
+## Before starting
+
+{{supported_release_or_explicit_source_contract_platform_interface_and_preconditions}}
+{{actual_scenario_contract_reference_and_known_verification_limits}}
+
+## Steps
+
+1. {{real_control_or_literal_command_with_cwd_and_inputs}}
+2. {{next_action_and_observable_success_not_only_a_spinner_stopping}}
+
+## If the result is unavailable
+
+{{important_failure_reason_and_safe_supported_next_action}}
+
+## Restrictions and reference
+
+{{unsupported_modes_compatibility_data_or_cost_constraints}}
+{{link_precise_parameter_or_API_reference_instead_of_copying_its_whole_table}}
+
+## Illustration — optional
+
+{{authorized_real_image_with_alt_caption_version_locale_and_origin_or_remove}}
+
+## Languages and terms — optional
+
+{{relative_link_to_primary_or_translation_and_shared_glossary}}
+{{if_outdated_visible_warning_and_current_primary_link_not_a_false_freshness_claim}}
+````
+
+Commands/keys/IDs/units retain technical meaning in translation. Use real screenshots
+matching language/version or explain differences. A generated future UI concept is not
+an implementation screenshot; no Figma/media tool is required for a useful text guide.
+Check content/revision links and the project's verified docs command; static success
+is not translation quality or product acceptance.

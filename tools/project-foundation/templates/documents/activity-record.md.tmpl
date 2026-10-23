@@ -1,0 +1,41 @@
+# Form: significant activity record
+
+Use for a meaningful engineering turn/decision, not a heartbeat, daily quota or second
+tracker. Default output: append a dated section to the existing project journal;
+only create `docs/research/<milestone>-journal.md` if it deserves an independent record.
+Copy payload only; [metadata](../../references/metadata.md) applies to a new durable
+file, not every appended section. Essential: change, reason/evidence, disposition of
+open work. Remove a redundant chronology; leave exact historical base intact.
+
+## Payload for a new file
+
+````markdown
+---
+id: "{{project_id}}-JOURNAL-{{unique_id}}"
+title: "{{significant_milestone}}"
+kind: journal
+status: draft
+created: "{{created_iso_date}}"
+updated: "{{updated_iso_date}}"
+areas: ["{{affected_area}}"]
+summary: "{{meaningful_turn_and_why_future_readers_need_it}}"
+---
+
+# {{significant_milestone}}
+
+## Context and change
+
+{{period_source_revision_and_prior_state}}
+{{significant_result_and_reason_not_a_complete_command_transcript}}
+
+## Decisions and evidence
+
+{{decisions_contracts_and_actual_checks_with_scope_links}}
+{{proposal_vs_implementation_vs_test_result}}
+
+## Disposition
+
+{{what_was_closed_and_what_is_now_the_current_knowledge_owner}}
+{{remaining_work_linked_to_actual_tracker_owner_not_new_permanent_TODO}}
+{{when_this_record_is_history_not_a_current_order}}
+````

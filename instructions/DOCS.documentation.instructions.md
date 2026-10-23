@@ -15,3 +15,5 @@ description: "Documentation, ADR, AGENTS router, and durable instruction governa
 - Do not create status, history, session-report, progress-report, or current-run evidence documents.
 - Keep task IDs, temporary findings, test counts, implementation chronology, and personal notes out of durable instructions.
 - When instruction routing changes, synchronize `AGENTS.md`, `docs/README.md`, and `docs/agent-workflow.md` as needed.
+- Adapted foundations live in `docs/foundation/`; the existing `docs/06-testing-strategy.md` remains the single testing-strategy owner. New substantial refactor plans may live in `docs/plans/` as design knowledge, not session progress reports. Mark proposed versus implemented behavior explicitly and preserve accepted ADR history.
+- `tools/project-foundation/` is the complete imported methodological reference. Do not edit it during ordinary application work or duplicate its universal rules into multiple competing project canons. Preserve its LICENSE, UPSTREAM and THIRD_PARTY_NOTICES. New foundations/plans use its authoring metadata; native AGENTS and existing instruction frontmatter retain their project formats.

@@ -1,0 +1,30 @@
+# Development/documentation profile, NOT runtime configuration or task history.
+# Agent fills {{fields}}. No secrets, machine sessions or absolute personal paths.
+# If an existing canonical profile is sufficient, link it instead of duplicating values.
+foundation_kit_version: "0.1.0"
+project:
+  name: "{{project_name}}"
+  purpose: "{{project_purpose}}"
+  stage: "{{project_stage}}"
+  stack: [] # Only established components; empty means not yet established.
+  interfaces: [] # Actual interfaces only. No imposed GUI/CLI/API/MCP parity.
+paths: # Project-root relative; adapt to existing layout.
+  docs: "docs"
+  instructions: "docs/instructions"
+  source: "{{source_path_or_unconfigured}}"
+  tests: "{{tests_path_or_unconfigured}}"
+languages:
+  internal_docs: "{{internal_language}}"
+  guides_primary: "{{guide_primary_language}}"
+  guide_translations: [] # Only release-required/explicitly selected languages.
+tracker:
+  type: "unconfigured"
+  reference: "" # Existing tracker URL/path; no second backlog.
+commands: []
+# Each configured command: {name: string, command: string, cwd: root-relative string,
+#   verification: string, restrictions: string}. Record actual check/base, not a guess.
+# Empty commands means NO command verified/configured by this profile.
+authority:
+  autonomous: "{{permitted_actions}}"
+  needs_approval: "{{approval_boundaries}}"
+canonical_sources: [] # Existing paths/URLs, if authoritative details already live there.

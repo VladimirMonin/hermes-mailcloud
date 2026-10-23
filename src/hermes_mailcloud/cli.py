@@ -12,15 +12,14 @@ import typer
 import typer._click as click
 from typer.core import TyperGroup
 
-from . import __version__
+from .application import CallOptions, ConfigOverrides, MailCloudApplication
 from .batch import BatchCommands, parse_batch_file
 from .commands.mkdir import MkdirCommand
 from .commands.move_copy import MoveCopyCommands
 from .commands.public import PublicCommands
-from .commands.read import ReadCommands
 from .commands.remove import RemoveCommand
 from .commands.transfer import TransferCommands
-from .config import CliConfigOverrides, ResolvedConfig, resolve_config
+from .config import CliConfigOverrides, ResolvedConfig, resolve_config, resolve_profile_name
 from .core.errors import ErrorKind, ErrorPayload, MailCloudError
 from .core.result import ResultEnvelope
 from .doctor import DoctorCommands
@@ -77,7 +76,7 @@ class _GlobalOptionsGroup(TyperGroup):
 class CliRuntimeOptions:
     """Global options parsed once and retained for later command implementations."""
 
-    profile: str
+    profile: str | None
     remote: str | None
     config_path: Path | None
     json_output: bool
@@ -104,7 +103,9 @@ app = typer.Typer(
 @app.callback()
 def main(
     context: typer.Context,
-    profile: str = typer.Option("default", "--profile", help="configuration profile"),
+    profile: str | None = typer.Option(
+        None, "--profile", help="configuration profile (HMC_PROFILE, otherwise default)"
+    ),
     remote: str | None = typer.Option(None, "--remote", help="rclone remote override"),
     config_path: Annotated[
         Path | None, typer.Option("--config", help="configuration file override")
@@ -142,18 +143,9 @@ def main(
 def version(context: typer.Context) -> None:
     """Print the installed package version."""
     options = _options(context)
-    if options.json_output:
-        _emit(
-            ResultEnvelope.success(
-                "version",
-                {"version": __version__},
-                profile=options.profile,
-                trace_id=options.trace_id,
-            ),
-            options,
-        )
-        return
-    typer.echo(__version__)
+    _emit_application_result(
+        MailCloudApplication().version(options=_call_options(options)), options
+    )
 
 
 @app.command()
@@ -199,15 +191,16 @@ def ls(
     dirs_only: bool = typer.Option(False, "--dirs-only", help="list directories only"),
 ) -> None:
     """List files and folders."""
-    _run_rclone_command(
-        context,
-        "ls",
-        lambda config, backend: ReadCommands(
-            backend,
-            config,
-            timeout_seconds=_effective_timeout(_options(context), config),
-            retries=_effective_read_retries(_options(context), config),
-        ).ls(path, recursive=recursive, files_only=files_only, dirs_only=dirs_only),
+    options = _options(context)
+    _emit_application_result(
+        MailCloudApplication().ls(
+            path,
+            recursive=recursive,
+            files_only=files_only,
+            dirs_only=dirs_only,
+            options=_call_options(options),
+        ),
+        options,
     )
 
 
@@ -217,15 +210,9 @@ def stat(
     remote_path: str = typer.Argument(..., help="remote path to inspect"),
 ) -> None:
     """Inspect one remote file or folder."""
-    _run_rclone_command(
-        context,
-        "stat",
-        lambda config, backend: ReadCommands(
-            backend,
-            config,
-            timeout_seconds=_effective_timeout(_options(context), config),
-            retries=_effective_read_retries(_options(context), config),
-        ).stat(remote_path),
+    options = _options(context)
+    _emit_application_result(
+        MailCloudApplication().stat(remote_path, options=_call_options(options)), options
     )
 
 
@@ -473,7 +460,7 @@ def _run_rclone_command(
         envelope = ResultEnvelope.failure(
             operation,
             exc.error,
-            profile=config.profile if config is not None else options.profile,
+            profile=config.profile if config is not None else _legacy_profile(options),
             remote=config.remote if config is not None else options.remote,
             trace_id=options.trace_id,
         )
@@ -520,7 +507,7 @@ def _run_doctor_command(context: typer.Context, *, live: bool) -> None:
         envelope = ResultEnvelope.failure(
             "doctor",
             exc.error,
-            profile=config.profile if config is not None else options.profile,
+            profile=config.profile if config is not None else _legacy_profile(options),
             remote=config.remote if config is not None else options.remote,
             trace_id=options.trace_id,
         )
@@ -566,7 +553,7 @@ def _run_batch_command(context: typer.Context, plan_path: Path) -> None:
         envelope = ResultEnvelope.failure(
             "batch",
             exc.error,
-            profile=config.profile if config is not None else options.profile,
+            profile=config.profile if config is not None else _legacy_profile(options),
             remote=config.remote if config is not None else options.remote,
             trace_id=options.trace_id,
         )
@@ -601,6 +588,34 @@ def _effective_read_retries(options: CliRuntimeOptions, config: ResolvedConfig) 
 def _effective_write_retries(options: CliRuntimeOptions) -> int:
     """Ignore profile read retries, but validate an explicit write retry request fail-closed."""
     return options.retries if options.retries is not None else 0
+
+
+def _legacy_profile(options: CliRuntimeOptions) -> str | None:
+    """Preserve pre-config metadata without masking the original typed failure."""
+    try:
+        return resolve_profile_name(CliConfigOverrides(profile=options.profile))
+    except MailCloudError:
+        return None
+
+
+def _call_options(options: CliRuntimeOptions) -> CallOptions:
+    """Translate parser values only; application owns resolution and defaults."""
+    return CallOptions(
+        config=ConfigOverrides(
+            profile=options.profile, remote=options.remote, config_path=options.config_path
+        ),
+        trace_id=options.trace_id,
+        dry_run=options.dry_run,
+        yes=options.yes,
+        timeout_seconds=options.timeout_seconds,
+        retries=options.retries,
+    )
+
+
+def _emit_application_result(envelope: ResultEnvelope, options: CliRuntimeOptions) -> None:
+    _emit(envelope, options)
+    if envelope.exit_code:
+        raise typer.Exit(envelope.exit_code)
 
 
 def _options(context: typer.Context) -> CliRuntimeOptions:

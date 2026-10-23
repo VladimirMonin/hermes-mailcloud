@@ -1,0 +1,46 @@
+filters:
+  and:
+    - 'file.ext == "md"'
+    - 'file.inFolder("guides")'
+    - 'file.hasProperty("id")'
+    - 'note.kind == "guide"'
+    - '["draft", "proposed", "accepted"].contains(note.status)'
+    - not:
+        - 'file.inFolder("_templates")'
+        - 'file.inFolder("archive")'
+        - 'file.inFolder("_work")'
+properties:
+  note.source_revision:
+    displayName: Primary content edition
+  note.translation_source_revision:
+    displayName: Actually checked source edition
+  note.translation_state:
+    displayName: Review summary, reconcile with source
+views:
+  - type: table
+    name: Guides and languages
+    order:
+      - file.name
+      - note.id
+      - note.language
+      - note.status
+      - note.source_revision
+      - note.translation_source
+      - note.translation_source_revision
+      - note.translation_state
+      - note.owner
+      - note.release_owner
+  - type: table
+    name: Translations to reconcile
+    filters:
+      and:
+        - 'file.hasProperty("translation_source")'
+        - 'note.translation_state != "current"'
+    order:
+      - file.name
+      - note.language
+      - note.translation_source
+      - note.translation_source_revision
+      - note.translation_state
+      - note.owner
+      - note.release_owner

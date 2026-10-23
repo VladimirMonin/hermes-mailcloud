@@ -2,14 +2,27 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import fields
 from pathlib import Path
 
 import pytest
 
-from hermes_mailcloud.config import CliConfigOverrides, ConfigError, ResolvedConfig, resolve_config
-from hermes_mailcloud.core.errors import ErrorKind
+from hermes_mailcloud.config import (
+    CliConfigOverrides,
+    ConfigError,
+    ConfigOverrides,
+    ResolvedConfig,
+    resolve_config,
+)
+from hermes_mailcloud.core.errors import ErrorKind, ErrorPayload
+from hermes_mailcloud.core.result import ResultEnvelope
 from hermes_mailcloud.output import redact_text, render_json, sanitize_value
+
+
+def test_config_overrides_preserves_the_legacy_alias() -> None:
+    assert CliConfigOverrides is ConfigOverrides
+    assert CliConfigOverrides() == ConfigOverrides(profile=None, remote=None, config_path=None)
 
 
 def test_cli_remote_overrides_environment_then_profile_config(tmp_path: Path) -> None:
@@ -155,3 +168,101 @@ def test_sanitizer_covers_auth_token_cookie_mapping_and_public_url_patterns() ->
         assert sentinel not in redacted + rendered
     assert "[REDACTED]" in rendered
     assert "public-url sha256:" in rendered
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("attempts=0 token=plain-secret bytes=7", "attempts=0 token=[REDACTED] bytes=7"),
+        ("token='quoted secret' count=0", "token=[REDACTED] count=0"),
+        ('prefix password="double secret" suffix', "prefix password=[REDACTED] suffix"),
+        (
+            "header\nAuthorization: Bearer header-secret\ncount=0",
+            "header\nAuthorization: [REDACTED]\ncount=0",
+        ),
+        ("Cookie: session=cookie-secret\nattempts=0", "Cookie: [REDACTED]\nattempts=0"),
+        (
+            r"prefix {\"token\": \"escaped-secret\"} count=0",
+            r"prefix {\"token\": \"[REDACTED]\"} count=0",
+        ),
+        (
+            'prefix {"items":[{"token":"nested-secret"}],"count":0} suffix',
+            'prefix {"items":[{"token":[REDACTED]}],"count":0} suffix',
+        ),
+        ("token=[REDACTED]", "token=[REDACTED]"),
+        ("token=[REDACTED]suffix-secret attempts=0", "token=[REDACTED] attempts=0"),
+        ("token=prefix-secret[REDACTED]suffix-secret bytes=7", "token=[REDACTED] bytes=7"),
+        (
+            "surrounding [REDACTED] token=additional-secret items=0",
+            "surrounding [REDACTED] token=[REDACTED] items=0",
+        ),
+        ("token=[REDACTED][REDACTED]suffix-secret, count=0", "token=[REDACTED], count=0"),
+        ("array=[token=[REDACTED]suffix-secret]; count=0", "array=[token=[REDACTED]]; count=0"),
+        (
+            "array=[token=[REDACTED]suffix-secret,42]; count=0",
+            "array=[token=[REDACTED],42]; count=0",
+        ),
+        (
+            '"password": "[REDACTED]suffix-secret", "attempts": 0',
+            '"password": [REDACTED], "attempts": 0',
+        ),
+    ],
+)
+def test_redact_text_is_stable_without_trusting_redaction_markers(raw: str, expected: str) -> None:
+    redacted = redact_text(raw)
+    assert redacted == expected
+    for _ in range(3):
+        redacted = redact_text(redacted)
+        assert redacted == expected
+
+
+def test_nested_projection_and_envelope_json_remain_safe_and_idempotent() -> None:
+    public_url = "https://cloud.mail.ru/public/repeated-redaction-synthetic/path"
+    raw = {
+        "items": [
+            {"description": "marker [REDACTED] token=nested-sentinel attempts=0", "size": 0},
+            ("password=[REDACTED]appended-sentinel", {"token": "[REDACTED]mapping-sentinel"}),
+        ],
+        "attempts": 0,
+        "flag": False,
+        "unknown": None,
+        "safe_marker": "keep [REDACTED] unchanged",
+        "public": public_url,
+    }
+    safe = sanitize_value(raw)
+    assert len(safe["items"]) == 2
+    assert safe["items"][0] == {
+        "description": "marker [REDACTED] token=[REDACTED] attempts=0",
+        "size": 0,
+    }
+    assert safe["items"][1] == ["password=[REDACTED]", {"token": "[REDACTED]"}]
+    assert safe["attempts"] == 0 and safe["flag"] is False and safe["unknown"] is None
+    assert safe["safe_marker"] == "keep [REDACTED] unchanged"
+    for _ in range(3):
+        assert sanitize_value(safe) == safe
+    assert json.loads(render_json(raw)) == safe
+    assert render_json(safe) == render_json(raw)
+    envelopes = (
+        ResultEnvelope.success("ls", raw, trace_id="token=[REDACTED]trace-sentinel"),
+        ResultEnvelope.failure(
+            "stat",
+            ErrorPayload(ErrorKind.NOT_FOUND, "token=[REDACTED]message-sentinel", raw),
+            warnings=("token=[REDACTED]warning-sentinel",),
+        ),
+    )
+    for envelope in envelopes:
+        assert json.loads(envelope.to_json()) == envelope.to_payload()
+        assert envelope.to_payload()["ok"] is envelope.ok
+    assert envelopes[1].exit_code == 7
+    emitted = repr(safe) + render_json(raw) + "".join(item.to_json() for item in envelopes)
+    for sentinel in (
+        public_url,
+        "nested-sentinel",
+        "appended-sentinel",
+        "mapping-sentinel",
+        "trace-sentinel",
+        "message-sentinel",
+        "warning-sentinel",
+    ):
+        assert sentinel not in emitted
+    assert "appended-sentinel" in raw["items"][1][0]

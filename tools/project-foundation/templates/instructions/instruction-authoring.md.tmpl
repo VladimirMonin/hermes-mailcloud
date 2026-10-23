@@ -1,0 +1,69 @@
+# Adaptation: authoring instructions
+
+Use for a project-wide practical rule on maintaining owner instructions. Copy only
+payload, fill fields, recompute output links. Default output:
+`docs/instructions/instruction-authoring.md`. [Metadata](../../references/metadata.md)
+is shared; [profiled-instruction](../documents/profiled-instruction.md.tmpl) is the
+new-owner form. Keep all six responsibilities below; remove only inapplicable client
+adapter details, not safety or verification. No automatic loader/permission engine.
+
+## Payload
+
+````markdown
+---
+id: "{{project_id}}-INSTRUCTION-AUTHORING"
+title: "Create and maintain owner instructions"
+kind: instruction
+status: draft
+created: "{{created_iso_date}}"
+updated: "{{updated_iso_date}}"
+areas: [documentation, instructions]
+summary: "One practical owner per responsibility, connected to contracts and actual readers."
+read_when: "Creating, splitting, moving or synchronizing project instructions and client routes."
+---
+
+# Instruction authoring
+
+## When and boundaries
+
+Use for durable triggered engineering rules. Not a substitute for a feature plan,
+architecture reference, release history, native skill or client security policy.
+
+## Procedure
+
+1. Search {{instruction_catalog_and_owner_map}} for an existing responsibility.
+   Update it when audience, invariants and update causes match. Create only for a
+   distinct recurring responsibility/trigger, not a task-specific report or filename.
+2. Read the full affected instruction and relevant current contracts. Establish
+   actual code owners/paths/symbols and consumers; source inspection confirms what
+   is implemented, not whether a defect should be legitimized.
+3. Record finite paths and dirty intersections. Use {{profiled_instruction_form_route}}:
+   trigger, scope/non-goals, owner/contract, practical steps, constraints with reasons,
+   sufficient checks/limits, related sources and update conditions. Keep one canonical
+   body; no duplicated philosophy or independently editable tables of the same rule.
+4. `read_when` names concrete tasks/files/contracts and terms. Commands specify real
+   environment, input, side effects and permission boundaries. Useful negative cases
+   belong with checks. Fictional APIs or assumed test commands do not become rules.
+5. Add catalog trigger and nearest daily route. Preserve required native routing
+   fields/adapters until their real consumer is migrated. A manual path is sufficient
+   for explicit reading; automatic loading needs client-specific proof. A missing
+   out-of-scope consumer is an exact integration handoff, not silent scope expansion.
+6. Run {{verified_documentation_check_or_unconfigured}} and inspect exact diff, source
+   consistency and actual routes. Report raw exits/unrun checks. Follow the project's
+   acceptance/save policy; freeze for independent review when required, without a
+   second review layer. A new instruction does not self-accept or change that policy.
+
+## Sync versus policy
+
+Updating a command after an accepted tool move is technical synchronization.
+Allowing expenses, changing data protection, weakening a test, removing independent
+review, expanding access or publishing is policy, even if presented as a small edit.
+Require the policy owner's explicit decision; continue unrelated permitted work.
+Never change a requirement just to match a bug or obtain green checks.
+
+## Maintenance
+
+Update when the owner/contract, command, consumer, invariant or permission changes.
+Preserve the project's native AGENTS/SKILL grammar; ordinary note frontmatter is not
+mechanically imposed on special formats or global profiles. Scope limits remain.
+````

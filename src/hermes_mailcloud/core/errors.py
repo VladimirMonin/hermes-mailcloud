@@ -78,6 +78,14 @@ class ErrorPayload:
         return payload
 
 
+def unknown_error() -> ErrorPayload:
+    """Report an unexpected failure without exception content or rollback claims."""
+    return ErrorPayload(
+        ErrorKind.UNKNOWN_ERROR,
+        "unexpected application failure; operation effects may be incomplete",
+    )
+
+
 class MailCloudError(Exception):
     """Expected product error carrying a schema-compatible typed payload."""
 

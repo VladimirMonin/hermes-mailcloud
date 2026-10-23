@@ -16,9 +16,11 @@ description: "Project-wide environment, dependency, source, schema, and safety r
 ## Repository boundaries
 
 - Runtime source belongs in `src/hermes_mailcloud/`; tests belong in `tests/`; JSON schemas belong in `schemas/`.
-- Current source and tests define the implemented CLI, including explicit dependency `setup`. Do not present commands described only in `docs/` as implemented.
+- Current source and tests define the implemented CLI, including explicit dependency `setup`. The supported in-process entry is `hermes_mailcloud.application`, currently limited to `MailCloudApplication.version/ls/stat`; their CLI handlers use that owner. Other handlers remain on their existing path. See the [current application interface](../docs/01-architecture.md#current-in-process-application-interface). Do not present planned methods or older release artifacts as implementing this boundary.
 - The documented v0.1 backend is an external `rclone` subprocess. Do not vendor rclone or copy GPL implementation code into this MIT repository.
 - When a machine-readable response contract changes, update the relevant schema, focused tests, and documentation in the same change.
+- For application-boundary changes, follow [architecture principles](../docs/foundation/architecture-principles.md). Application orchestration owns configuration precedence, operation defaults, safety admission and typed results; CLI/GUI/MCP adapters translate inputs and outputs rather than reimplementing these rules. Introduce only the state/lifecycle machinery required by the actual scenario, not a speculative command bus or daemon.
+- Diagnostic changes also require [LOG.observability.instructions.md](LOG.observability.instructions.md). A private public-link journal is operational state, not an ordinary diagnostic log.
 
 ## Safety
 

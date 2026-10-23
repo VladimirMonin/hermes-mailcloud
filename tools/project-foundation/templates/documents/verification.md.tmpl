@@ -1,0 +1,52 @@
+# Form: verification and closeout
+
+Use for durable acceptance/evidence where a short task result is insufficient.
+Default output: existing evidence family, or `docs/research/<scope>-verification.md`.
+Copy payload only; fill [metadata](../../references/metadata.md). Essential: exact
+subject/identity, method, real results/limits, verdict scope and remaining action.
+Remove irrelevant platform/artifact columns, not unknown/unrun distinctions. No
+reviewer-of-reviewer chain; this form grants neither execution nor commit authority.
+
+## Payload
+
+````markdown
+---
+id: "{{project_id}}-VERIFY-{{unique_id}}"
+title: "{{bounded_subject}} — verification and closeout"
+kind: verification
+status: draft
+created: "{{created_iso_date}}"
+updated: "{{updated_iso_date}}"
+areas: ["{{affected_area}}"]
+summary: "{{actual_verdict_scope_and_material_limit}}"
+---
+
+# {{bounded_subject}} — verification
+
+## Subject and method
+
+{{requirement_scenario_and_exact_source_artifact_or_profile_identity}}
+{{who_checked_what_independently_and_regression_strategy}}
+{{authorized_inputs_data_isolation_and_exclusions}}
+
+## Actual results
+
+| Check / command | Raw exit / observed outcome | Evidence / limit |
+|---|---|---|
+| {{actual_check}} | {{actual_exit_or_not_run_cancelled_blocked}} | {{accessible_evidence_and_what_is_not_proved}} |
+
+{{written_vs_executed_skipped_cancelled_distinctions}}
+{{static_unit_integration_real_user_path_and_visual_proof_are_not_interchangeable}}
+
+## Findings and verdict
+
+{{required_findings_with_contract_path_impact_and_correction_or_none}}
+{{accepted_scope_or_rejected_blocked_not_proven_with_reason}}
+{{documentation_instruction_scenario_guide_translation_impact_or_justified_none}}
+
+## Save, remainder and stop
+
+{{local_commit_if_authorized_and_actual_or_no_commit_no_publication}}
+{{preserved_foreign_changes_and_owned_resource_cleanup}}
+{{required_remainder_owner_and_next_action_or_finished_stop}}
+````

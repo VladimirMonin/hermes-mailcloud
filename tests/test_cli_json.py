@@ -88,6 +88,31 @@ def test_json_version_is_a_single_success_envelope() -> None:
     assert isinstance(payload["result"]["version"], str)
 
 
+@pytest.mark.parametrize(
+    ("arguments", "selected"),
+    [([], "work"), (["--profile", "default"], "default"), (["--profile", "other"], "other")],
+)
+def test_version_profile_selection_is_lazy(
+    tmp_path: Path, arguments: list[str], selected: str
+) -> None:
+    result = _run_cli(
+        "--json",
+        *arguments,
+        "version",
+        environment={"HMC_PROFILE": "work", "HMC_CONFIG": str(tmp_path / "absent.toml")},
+    )
+    assert result.returncode == 0 and result.stderr == ""
+    payload = json.loads(result.stdout)
+    assert payload["profile"] == selected and "remote" not in payload
+    assert payload["result"]["version"]
+
+
+def test_profile_help_explains_environment_and_default() -> None:
+    result = _run_cli("--help")
+    assert result.returncode == 0
+    assert "HMC_PROFILE" in result.stdout and "default" in result.stdout
+
+
 def test_human_doctor_returns_a_read_only_report_without_raw_backend_output(tmp_path: Path) -> None:
     result = _run_cli("doctor", environment=_doctor_environment(tmp_path))
 
@@ -151,6 +176,55 @@ def test_every_json_help_path_emits_one_json_document_without_rich_output(
     assert payload["ok"] is True
     assert payload["operation"] == "cli"
     assert payload["result"]["help"]["command"] == operation
+
+
+@pytest.mark.parametrize(
+    ("profile_arguments", "profile", "remote"),
+    [([], "work", "work:"), (["--profile", "default"], "default", "default:")],
+    ids=["omitted-profile-uses-environment", "explicit-default-wins"],
+)
+def test_cli_profile_environment_and_explicit_default(
+    tmp_path: Path, profile_arguments: list[str], profile: str, remote: str
+) -> None:
+    config = tmp_path / "profiles.toml"
+    config.write_text(
+        '[profiles.default]\nremote = "default:"\n[profiles.work]\nremote = "work:"\n',
+        encoding="utf-8",
+    )
+    environment = _doctor_environment(tmp_path)
+    environment.pop("HMC_REMOTE")
+    environment.update(HMC_CONFIG=str(config), HMC_PROFILE="work")
+    result = _run_cli("--json", *profile_arguments, "doctor", environment=environment)
+
+    assert result.returncode == 0
+    assert result.stderr == ""
+    payload = json.loads(result.stdout)
+    assert payload["profile"] == profile
+    assert payload["remote"] == remote
+    assert payload["result"]["mode"] == "read_only"
+
+
+@pytest.mark.parametrize(
+    ("arguments", "code", "kind"),
+    [
+        (["doctor"], 3, "config_error"),
+        (["mkdir", "/Hermes/private/planned", "--dry-run"], 3, "config_error"),
+        (["batch", "absent-plan.json"], 7, "not_found"),
+        (["ls", "/Hermes"], 3, "config_error"),
+        (["version"], 3, "config_error"),
+    ],
+)
+def test_invalid_environment_profile_cannot_escape_safe_error_metadata(
+    tmp_path: Path, arguments: list[str], code: int, kind: str
+) -> None:
+    result = _run_cli(
+        "--json",
+        *arguments,
+        environment={**_doctor_environment(tmp_path), "HMC_PROFILE": " "},
+    )
+    assert result.returncode == code and result.stderr == ""
+    assert result.stdout.count("\n") == 1
+    assert json.loads(result.stdout)["error"]["kind"] == kind
 
 
 def test_batch_missing_plan_returns_a_typed_nonzero_json_error() -> None:

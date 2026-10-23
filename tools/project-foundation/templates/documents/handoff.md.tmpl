@@ -1,0 +1,40 @@
+# Form: short handoff
+
+Use to continue one bounded task. Default: the task's authorized temporary area or
+tracker, not a permanent report chain. Most handoffs need only the body below; if
+explicitly retained as durable knowledge, add the optional passport. Copy only the
+selected payload; [metadata](../../references/metadata.md) governs durable records.
+Essential: next result, base/dirty/scope, owners/constraints, checks/limits and exact
+remainder. Remove irrelevant optional fields; never paste secrets or private logs.
+
+## Optional durable passport
+
+```yaml
+---
+id: "{{project_id}}-HANDOFF-{{unique_id}}"
+title: "{{bounded_task}} — continuation"
+kind: handoff
+status: draft
+created: "{{created_iso_date}}"
+updated: "{{updated_iso_date}}"
+areas: ["{{affected_area}}"]
+summary: "{{next_result_and_current_limit}}"
+---
+```
+
+## Body payload
+
+```markdown
+# Continue {{bounded_task}}
+
+- Result / finish criterion: {{specific_next_outcome_and_stop}}.
+- Base / dirty: {{exact_source_and_unrelated_changes_to_preserve}}.
+- Allowed paths / exclusions: {{finite_write_scope_and_protected_areas}}.
+- Sources / owners: {{actual_rule_contract_and_implementation_routes}}.
+- Done / evidence: {{actual_result_commands_raw_exits_and_limits}}.
+- Required next: {{one_action_or_exact_blocker_owner_and_question}}.
+- Review / save authority: {{who_may_accept_write_index_commit_or_publish}}.
+
+This snapshot does not change policy, confer new permissions, or turn a prior PASS
+into proof for changed artifacts. Reuse unchanged evidence only after impact analysis.
+```
