@@ -89,8 +89,10 @@ refusal does not prove credentials are absent. See
 After the development sync, build wheel and sdist and run the portable harness
 with the selected development interpreter. It creates a new runtime and cwd
 outside the checkout, installs only locked runtime dependencies and the wheel,
-checks import provenance, then exercises the real launcher without injection and
-fake-backed file/public/batch scenarios with installed components. No Mail.ru
+checks import provenance, then exercises the real launcher without injection,
+fake-backed file/public/batch CLI scenarios, and a separate direct version/read/
+file/public API process with CLI SDK imports blocked before product imports.
+The API checks include file/journal readback, dry-run and safety refusals. No Mail.ru
 credentials or live probe are used; `doctor --json` remains read-only. Missing
 build/runtime dependencies may be resolved through package indexes.
 
@@ -131,10 +133,13 @@ Hermes Agent → hermes-mailcloud CLI → policy + JSON contract → rclone subp
 ```
 
 Current source-built packages also expose a synchronous, in-process Python entry:
-`hermes_mailcloud.application.MailCloudApplication`, with **only `version`, `ls`
-and `stat`**. These CLI handlers use the same application owner; other commands
-retain their existing path. This is an internal callable boundary, not an HTTP
-service. It returns a safe typed envelope without printing or requiring Typer.
+`hermes_mailcloud.application.MailCloudApplication`, with **`version`, `ls`,
+`stat`, `mkdir`, `upload`, `download`, `mv`, `cp`, `rm`, `publish` and `link`**.
+These CLI handlers use the same application owner; `setup`, `doctor` and `batch`
+retain their existing CLI path and are not yet Python API methods. This is an
+internal callable boundary, not an HTTP service. It returns a safe typed envelope
+without printing or requiring Typer/Click/Rich. File/public calls preserve the
+existing confirmation, overwrite, private-journal and no-write-retry policies.
 See the [application interface and example](docs/01-architecture.md#current-in-process-application-interface).
 
 The immutable `v0.1.0` release wheel above predates this boundary; the unchanged

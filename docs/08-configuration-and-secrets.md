@@ -180,14 +180,25 @@ hermes-mailcloud --profile work --remote mailru-test: doctor --json
 
 `--remote` переопределяет remote из профиля.
 
-Для текущего прямого `version/ls/stat` API явные поля задаются через
+Для текущего прямого version/read/file/public API явные поля задаются через
 `CallOptions(config=ConfigOverrides(profile=..., remote=..., config_path=...))`;
 `config_path` — `Path`. Эти overrides занимают то же место, что CLI-флаги.
 `CliConfigOverrides` сохранён как alias, прежний `resolve_config(cli=...)` callable
 не удалён. При пропущенном profile используется `HMC_PROFILE`, затем `default`;
 `version` выбирает имя без чтения TOML. Экземпляр application копирует environment
-при создании, но перечитывает config для каждого read-вызова. Чтобы применить новую
-среду, создайте новый экземпляр; это не sandbox для process home expansion.
+при создании, но перечитывает config для каждого file/public/read-вызова. Чтобы
+применить новую среду, создайте новый экземпляр; это не sandbox для process home
+expansion. Config и backend не сохраняются между вызовами, в том числе после отказа.
+
+`CallOptions.timeout_seconds=None` использует profile/default timeout, положительный
+`int` задаёт override на один backend invocation, не deadline всего publish.
+`retries=None` использует profile retries только для `ls`/`stat`; для всех восьми
+file/public writes эффективный бюджет — **0**. Явный положительный write budget
+отклоняется как `invalid_arguments` даже для dry-run; ноль разрешён. Boolean,
+строковые числа и float не заменяют integer runtime options. `overwrite=None`
+для standalone upload/download/mv/cp/publish выбирает profile `default_overwrite`
+(по умолчанию `never`); явные значения — только `never`, `always`, `if-newer`.
+Эти defaults не изменяют отдельные batch defaults.
 Подробнее: [поддерживаемый API](01-architecture.md#current-in-process-application-interface).
 
 Для executable порядок: explicit `HMC_RCLONE_PATH` → explicit profile

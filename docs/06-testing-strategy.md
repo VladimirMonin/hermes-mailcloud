@@ -11,9 +11,9 @@
 Проверяем обещанное поведение, а не количество классов или процент покрытия.
 Для command-first-перехода нужны два соединённых пути: прямой вызов настоящего
 прикладного API без Typer и вызов того же владельца через настоящий CLI.
-Текущий поддерживаемый API ограничен `version/ls/stat`; его connected проверки
-находятся в `tests/application/`. Наличие этого пакета не доказывает перенос
-остальных операций из [полного плана](plans/command-first-refactor.md).
+Текущий поддерживаемый API: `version/ls/stat/mkdir/upload/download/mv/cp/rm/publish/link`;
+его connected проверки находятся в `tests/application/`. System/batch API и
+окончательное удаление migration glue остаются в [полном плане](plans/command-first-refactor.md).
 Внешний rclone/облако можно заменять; сам проверяемый прикладной сценарий — нельзя.
 Результаты, коды ошибок, сохранность файла/журнала, отказ до эффекта, отсутствие
 повторной записи и возможность следующей операции важнее одного `mock.called`.
@@ -178,8 +178,18 @@ cleanup не должен давать success или clean timeout. POSIX proce
 
 File-command controls сохраняют реального конкурентного победителя download
 `never` (no-clobber) и проверяют `if-newer` по фактически различимым timestamps,
-а не по предположению о точности часов/файловой системы. Dry-run без backend,
-write-once retry policy и public/batch safety остаются обязательными.
+а не по предположению о точности часов/файловой системы. Connected API/CLI проверки
+дополнительно проходят настоящие file/public owners: строгие типы, meaningful
+zero-effect dry-run, profile read retries против explicit write budget, полные
+байты destination и очистку своего partial temp после timeout. Public проверки
+используют native private journal: preflight до cloud, fingerprint и private record
+при успехе, безопасный record failure после link без retry/unlink/rollback.
+Прямые данные и реальный CLI output проверяются на typed/unknown errors и отсутствие
+synthetic secrets. Installed API проверяется в отдельном процессе без CLI SDK;
+full provenance не импортирует CLI перед этим gate. Publish/link проверяются offline,
+если действующая live authority ограничена `/TEST`: обход public-root policy ради
+теста недопустим. Dry-run без backend, write-once retry policy и public/batch safety
+остаются обязательными.
 
 ## 6. Golden JSON tests 📦
 

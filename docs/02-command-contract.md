@@ -139,11 +139,18 @@ packaged pins, не произвольный URL. `--dry-run` не скачив�
 
 ## 3.3. Внутренний Python-вход
 
-В текущих исходниках CLI `version`, `ls`, `stat` делегируют
+В текущих исходниках CLI `version`, `ls`, `stat`, `mkdir`, `upload`, `download`,
+`mv`, `cp`, `rm`, `publish` и `link` делегируют
 `hermes_mailcloud.application.MailCloudApplication`. Прямые вызовы возвращают тот
-же безопасный `ResultEnvelope`, а не запускают CLI или HTTP-сервер. Только эти три
-метода доступны через поддерживаемую application-поверхность; остальные CLI-команды
-продолжают работать прежним путём. Входы/defaults, пример и границы поставки — в
+же безопасный `ResultEnvelope`, а не запускают CLI или HTTP-сервер. Поддерживаются
+только эти одиннадцать методов; `setup`, `doctor`, `batch` и `batch_file` пока не
+входят в Python API, а соответствующие CLI-команды сохраняют прежнюю оркестрацию.
+File/public defaults и guards одинаковы для прямого вызова и CLI: write retries
+по умолчанию равны нулю, положительный explicit budget отклоняется даже в dry-run;
+`rm`/`publish` требуют подтверждения для реального выполнения, standalone `link` —
+нет. Поддерживаемый write dry-run возвращает план без backend/temp/journal effects,
+но продолжает проверять аргументы, policy и существование локального source.
+Входы/defaults, пример и границы поставки — в
 [текущей архитектуре](01-architecture.md#current-in-process-application-interface).
 Нормативный JSON-контракт ниже не заменён отдельной схемой Python API.
 

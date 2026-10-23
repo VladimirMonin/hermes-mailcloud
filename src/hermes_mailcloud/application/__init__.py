@@ -1,4 +1,4 @@
-"""Supported in-process operations: version, ls and stat; no CLI imports or I/O."""
+"""In-process version/read/file/public operations; no CLI imports or import-time I/O."""
 
 from ..config import ConfigOverrides
 from .contracts import Backend, BackendFactory, CallOptions, ConfigLoader, Overwrite

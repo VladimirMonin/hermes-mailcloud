@@ -14,11 +14,6 @@ from typer.core import TyperGroup
 
 from .application import CallOptions, ConfigOverrides, MailCloudApplication
 from .batch import BatchCommands, parse_batch_file
-from .commands.mkdir import MkdirCommand
-from .commands.move_copy import MoveCopyCommands
-from .commands.public import PublicCommands
-from .commands.remove import RemoveCommand
-from .commands.transfer import TransferCommands
 from .config import CliConfigOverrides, ResolvedConfig, resolve_config, resolve_profile_name
 from .core.errors import ErrorKind, ErrorPayload, MailCloudError
 from .core.result import ResultEnvelope
@@ -223,19 +218,8 @@ def mkdir(
 ) -> None:
     """Create a remote directory."""
     options = _options(context)
-    _run_rclone_command(
-        context,
-        "mkdir",
-        lambda config, backend: MkdirCommand(
-            backend,
-            config,
-            timeout_seconds=_effective_timeout(options, config),
-        ).run(
-            remote_path,
-            dry_run=options.dry_run,
-            yes=options.yes,
-            retries=_effective_write_retries(options),
-        ),
+    _emit_application_result(
+        MailCloudApplication().mkdir(remote_path, options=_call_options(options)), options
     )
 
 
@@ -250,18 +234,11 @@ def upload(
 ) -> None:
     """Upload a file (private by default)."""
     options = _options(context)
-    _run_rclone_command(
-        context,
-        "upload",
-        lambda config, backend: TransferCommands(
-            backend, config, timeout_seconds=_effective_timeout(options, config)
-        ).upload(
-            local,
-            remote_path,
-            overwrite=overwrite,
-            dry_run=options.dry_run,
-            retries=_effective_write_retries(options),
+    _emit_application_result(
+        MailCloudApplication().upload(
+            local, remote_path, overwrite=overwrite, options=_call_options(options)
         ),
+        options,
     )
 
 
@@ -276,18 +253,11 @@ def download(
 ) -> None:
     """Download a remote file."""
     options = _options(context)
-    _run_rclone_command(
-        context,
-        "download",
-        lambda config, backend: TransferCommands(
-            backend, config, timeout_seconds=_effective_timeout(options, config)
-        ).download(
-            remote_path,
-            local,
-            overwrite=overwrite,
-            dry_run=options.dry_run,
-            retries=_effective_write_retries(options),
+    _emit_application_result(
+        MailCloudApplication().download(
+            remote_path, local, overwrite=overwrite, options=_call_options(options)
         ),
+        options,
     )
 
 
@@ -302,18 +272,11 @@ def mv(
 ) -> None:
     """Move or rename a remote object."""
     options = _options(context)
-    _run_rclone_command(
-        context,
-        "mv",
-        lambda config, backend: MoveCopyCommands(
-            backend, config, timeout_seconds=_effective_timeout(options, config)
-        ).move(
-            source_path,
-            target_path,
-            overwrite=overwrite,
-            dry_run=options.dry_run,
-            retries=_effective_write_retries(options),
+    _emit_application_result(
+        MailCloudApplication().mv(
+            source_path, target_path, overwrite=overwrite, options=_call_options(options)
         ),
+        options,
     )
 
 
@@ -328,18 +291,11 @@ def cp(
 ) -> None:
     """Copy a remote object."""
     options = _options(context)
-    _run_rclone_command(
-        context,
-        "cp",
-        lambda config, backend: MoveCopyCommands(
-            backend, config, timeout_seconds=_effective_timeout(options, config)
-        ).copy(
-            source_path,
-            target_path,
-            overwrite=overwrite,
-            dry_run=options.dry_run,
-            retries=_effective_write_retries(options),
+    _emit_application_result(
+        MailCloudApplication().cp(
+            source_path, target_path, overwrite=overwrite, options=_call_options(options)
         ),
+        options,
     )
 
 
@@ -351,18 +307,9 @@ def rm(
 ) -> None:
     """Permanently delete one file, or a path and descendants with --recursive."""
     options = _options(context)
-    _run_rclone_command(
-        context,
-        "rm",
-        lambda config, backend: RemoveCommand(
-            backend, config, timeout_seconds=_effective_timeout(options, config)
-        ).run(
-            remote_path,
-            recursive=recursive,
-            dry_run=options.dry_run,
-            yes=options.yes,
-            retries=_effective_write_retries(options),
-        ),
+    _emit_application_result(
+        MailCloudApplication().rm(remote_path, recursive=recursive, options=_call_options(options)),
+        options,
     )
 
 
@@ -377,19 +324,11 @@ def publish(
 ) -> None:
     """Upload a file and create a public link."""
     options = _options(context)
-    _run_rclone_command(
-        context,
-        "publish",
-        lambda config, backend: PublicCommands(
-            backend, config, timeout_seconds=_effective_timeout(options, config)
-        ).publish(
-            local,
-            remote_path,
-            overwrite=overwrite,
-            dry_run=options.dry_run,
-            yes=options.yes,
-            retries=_effective_write_retries(options),
+    _emit_application_result(
+        MailCloudApplication().publish(
+            local, remote_path, overwrite=overwrite, options=_call_options(options)
         ),
+        options,
     )
 
 
@@ -400,16 +339,8 @@ def link(
 ) -> None:
     """Get or create a public link for an existing file."""
     options = _options(context)
-    _run_rclone_command(
-        context,
-        "link",
-        lambda config, backend: PublicCommands(
-            backend, config, timeout_seconds=_effective_timeout(options, config)
-        ).link(
-            remote_path,
-            dry_run=options.dry_run,
-            retries=_effective_write_retries(options),
-        ),
+    _emit_application_result(
+        MailCloudApplication().link(remote_path, options=_call_options(options)), options
     )
 
 

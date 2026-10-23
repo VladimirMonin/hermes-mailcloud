@@ -25,6 +25,14 @@ def require_bool(value: object, field: str) -> None:
         raise invalid_argument(field)
 
 
+def require_overwrite(value: object) -> None:
+    """Validate the callable contract without coercing non-string input."""
+    if value is not None and (
+        not isinstance(value, str) or value not in {"never", "always", "if-newer"}
+    ):
+        raise invalid_argument("overwrite")
+
+
 def validate_options(options: CallOptions | None) -> CallOptions:
     """Validate before inspecting nested inputs or permitting configuration access."""
     if options is None:

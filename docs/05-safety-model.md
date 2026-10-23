@@ -14,6 +14,30 @@
 > [!important]
 > Этот документ фиксирует правила безопасности для `hermes-mailcloud`. Главный принцип: агент должен уметь работать автономно, но не должен случайно публиковать личные данные, удалять файлы или светить секреты в логах.
 
+## Защиты прямого Python-вызова
+
+В source-built пакетах поддерживаемый
+[`MailCloudApplication`](01-architecture.md#current-in-process-application-interface)
+применяет те же file/public guards, что CLI. Прямой вызов не отменяет нормализацию,
+protected rm roots, dangerous-name/public-root policy, confirmation и native private
+journal. `CallOptions.yes` и `dry_run` принимают только настоящие boolean. Неверные
+runtime-типы аргументов/options и недопустимый overwrite отклоняются до config.
+`yes` — намерение текущего процесса, не аутентификация или новое право на данные.
+
+Все восемь file/public writes используют нулевой default retry budget, независимо
+от profile read retries. Явный положительный бюджет запрещён даже для dry-run.
+Write dry-run возвращает meaningful plan без backend/temp/journal mutations,
+но проверяет policy и локальный source; это не обещание последующего успеха.
+Для реального public-вызова journal preflight предшествует cloud; он может создать
+приватный каталог/lock и не гарантирует позднюю запись. Ошибка после link не
+означает отсутствия эффекта и не запускает retry, unlink или rollback. Raw URL
+остаётся только в private journal, прямой результат содержит fingerprint либо
+безопасную ошибку. Правила native storage не ослабляются для Python consumer.
+
+`setup`, `doctor` и `batch` пока сохраняют CLI-путь; нового публичного Python-входа
+для них нет. Разрешение на тесты в `/TEST` не разрешает публикацию в `/Hermes/public`
+или обход фиксированного public root.
+
 ## 1. Цель модели безопасности 🧭
 
 `hermes-mailcloud` проектируется не как пользовательский файловый менеджер, а как CLI для агентов. У агента нет человеческой интуиции, поэтому опасные действия должны быть ограничены политиками, флагами и предсказуемыми ошибками.

@@ -622,12 +622,17 @@ def exercise(
 
     control["api_stat_path"] = "/Hermes/private/report ü &;$%.txt"
     control["failure_target"] = "fake:/Hermes/private/api-failure"
+    control["api_source"] = str(root / "api-source.txt")
+    control["api_destination"] = str(root / "api-downloaded.txt")
     control_path.write_text(json.dumps(control), encoding="utf-8")
     before_api = calls()
     stdout, stderr = commands.run(
         "installed-direct-api-no-cli-sdk",
         [*prefix, "api", str(control_path)],
-        environment=fake_environment,
+        environment={
+            **fake_environment,
+            "HMC_LINKS_JOURNAL": str(root / "api-private" / "links.jsonl"),
+        },
     )
     require(
         not stderr and PUBLIC_URL not in stdout and DIAGNOSTIC not in stdout, "unsafe API output"
@@ -642,6 +647,20 @@ def exercise(
         ("refusal", "ls", 2),
         ("failure", "stat", 10),
         ("after_failure", "ls", 0),
+        *(
+            (op, op, 0)
+            for op in ("mkdir", "upload", "download", "mv", "cp", "rm", "publish", "link")
+        ),
+        *(
+            ("dry-" + op, op, 0)
+            for op in ("mkdir", "upload", "download", "mv", "cp", "rm", "publish", "link")
+        ),
+        ("write-retries", "mkdir", 2),
+        ("protected-rm", "rm", 2),
+        ("write-bool", "rm", 2),
+        ("overwrite", "upload", 2),
+        ("confirmation", "publish", 9),
+        ("outside-public", "link", 9),
     ):
         require(api_report["exits"][name] == code, "wrong direct API exit")
         json_envelope(
@@ -659,7 +678,7 @@ def exercise(
         "direct API did not exercise the real read/refusal path",
     )
     require(
-        calls()[len(before_api) :]
+        calls()[len(before_api) :][:4]
         == [
             ["lsjson", "fake:/Hermes"],
             ["lsjson", "fake:" + control["api_stat_path"], "--stat", "--hash"],
@@ -667,6 +686,72 @@ def exercise(
             ["lsjson", "fake:/Hermes"],
         ],
         "direct API execution/refusal boundary changed",
+    )
+    api_calls = calls()[len(before_api) :]
+    require(
+        [row[0] for row in api_calls]
+        == ["lsjson"] * 4
+        + ["mkdir", "copyto", "copyto", "moveto", "copyto", "deletefile", "copyto", "link", "link"],
+        "direct API writes were retried or dry-run/refusal reached the backend",
+    )
+    require(
+        api_calls[4] == ["mkdir", "fake:/TEST/installed-api/directory"]
+        and api_calls[5]
+        == ["copyto", control["api_source"], "fake:/TEST/installed-api/file.txt", "--immutable"]
+        and api_calls[7:]
+        == [
+            [
+                "moveto",
+                "fake:/TEST/installed-api/file.txt",
+                "fake:/TEST/installed-api/moved.txt",
+                "--immutable",
+            ],
+            [
+                "copyto",
+                "fake:/TEST/installed-api/file.txt",
+                "fake:/TEST/installed-api/copied.txt",
+                "--immutable",
+            ],
+            ["deletefile", "fake:/TEST/installed-api/file.txt"],
+            [
+                "copyto",
+                control["api_source"],
+                "fake:/Hermes/public/installed-api.txt",
+                "--immutable",
+            ],
+            ["link", "fake:/Hermes/public/installed-api.txt"],
+            ["link", "fake:/Hermes/public/installed-api.txt"],
+        ],
+        "direct API owner argv changed",
+    )
+    require(
+        len(api_calls[6]) == 3
+        and api_calls[6][:2] == ["copyto", "fake:/TEST/installed-api/file.txt"]
+        and Path(api_calls[6][2]).parent == root
+        and not Path(api_calls[6][2]).exists(),
+        "direct API download did not use/clean its sibling temporary",
+    )
+    resources = api_report["resources"]
+    require(
+        resources["download_bytes"] == 16
+        and resources["download_sha256"] == hashlib.sha256(b"downloaded-wheel").hexdigest()
+        and resources["source_preserved"]
+        and resources["dry_run_journal_unchanged"]
+        and resources["journal_operations"] == ["publish", "link"],
+        "direct API resource readback failed",
+    )
+    for op in ("mkdir", "upload", "download", "mv", "cp", "rm", "publish", "link"):
+        planned = api_report["payloads"]["dry-" + op]["result"]
+        require(
+            planned["dry_run"] is True and planned["plan"], "API dry-run has no meaningful plan"
+        )
+    require(
+        api_report["payloads"]["upload"]["result"]["published"] is False
+        and api_report["payloads"]["publish"]["result"]["published"] is True
+        and api_report["payloads"]["link"]["result"]["public_url_fingerprint"].startswith("sha256:")
+        and api_report["payloads"]["confirmation"]["error"]["kind"] == "confirmation_required"
+        and api_report["payloads"]["outside-public"]["error"]["kind"] == "unsafe_public_path",
+        "direct API publication admission/result changed",
     )
     api_components = api_report["provenance"]["loaded_components"]
     require("hermes_mailcloud.cli" not in api_components, "API provenance pre-imported CLI")

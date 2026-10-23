@@ -30,6 +30,14 @@ def test_only_implemented_operations_are_public_and_options_are_small_and_frozen
         "version",
         "ls",
         "stat",
+        "mkdir",
+        "upload",
+        "download",
+        "mv",
+        "cp",
+        "rm",
+        "publish",
+        "link",
     }
     first, second = CallOptions(), CallOptions()
     assert first.config == ConfigOverrides() and first.config is not second.config
@@ -209,6 +217,10 @@ def test_real_read_api_executes_with_cli_sdk_imports_blocked(tmp_path: Path) -> 
         assert app.version().ok
         read = app.ls('/Hermes')
         assert read.ok and read.result['items'][0]['size'] == 0
+        planned = app.mkdir('/TEST/api-plan', options=CallOptions(dry_run=True))
+        assert planned.ok and planned.result['dry_run'] is True and planned.result['plan']
+        protected = app.rm('/TEST', options=CallOptions(yes=True))
+        assert not protected.ok and protected.exit_code == 2
         refused = app.ls('/Hermes', recursive=1)
         assert refused.exit_code == 2
         assert not any(name.split('.')[0] in {{'typer', 'click', 'rich'}} for name in sys.modules)

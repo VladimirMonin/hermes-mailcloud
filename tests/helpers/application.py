@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
 
 from tests.helpers.cli_fake import isolated_environment
@@ -13,7 +13,9 @@ from hermes_mailcloud.rclone.runner import RcloneResult, RcloneRunner
 class RecordingBackend(RcloneRunner):
     """Replace execution only; retain the real require_success/error mapping."""
 
-    def __init__(self, *responses: RcloneResult | BaseException) -> None:
+    def __init__(
+        self, *responses: RcloneResult | BaseException | Callable[[Sequence[str]], RcloneResult]
+    ) -> None:
         super().__init__("never-executed-rclone", environment={})
         self.responses = list(responses)
         self.calls: list[tuple[list[str], float | None]] = []
@@ -25,7 +27,7 @@ class RecordingBackend(RcloneRunner):
         response = self.responses.pop(0)
         if isinstance(response, BaseException):
             raise response
-        return response
+        return response(args) if callable(response) else response
 
 
 def synthetic_environment(

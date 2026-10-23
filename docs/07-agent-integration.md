@@ -16,7 +16,7 @@
 
 ## 1. Основное правило 🧭
 
-Агент всегда вызывает команды так:
+При использовании CLI агент вызывает команды так:
 
 ```bash
 hermes-mailcloud <command> ... --json
@@ -47,6 +47,39 @@ assume an automatic write retry.
 ```text
 dry-run → проверить JSON plan → выполнить с обязательным для команды подтверждением → прочитать result/error
 ```
+
+### Прямой Python-вызов в source-built пакете
+
+Агент в том же Python-окружении может использовать поддерживаемый
+[`MailCloudApplication`](01-architecture.md#current-in-process-application-interface)
+без Typer/Click/Rich и без запуска CLI-процесса. Доступны `version`, `ls`, `stat`,
+`mkdir`, `upload`, `download`, `mv`, `cp`, `rm`, `publish`, `link` — не внутренние
+command services и не ещё не реализованные system/batch методы.
+
+```python
+from hermes_mailcloud.application import CallOptions, MailCloudApplication
+
+application = MailCloudApplication()
+planned = application.mkdir(
+    "/TEST/example-plan", options=CallOptions(dry_run=True)
+)
+payload = planned.to_payload()
+exit_code = planned.exit_code
+```
+
+Результат уже санитизирован до доступа к его полям; API ничего не печатает и не
+завершает процесс. Проверяйте `ok`/typed `error.kind`/`exit_code`, не текст ошибки.
+Реальные `rm`/`publish` требуют `CallOptions(yes=True)`; standalone `link` — нет.
+Все guards и private-journal правила сохраняются, write retries по умолчанию нулевые,
+explicit positive budget запрещён даже в dry-run. После timeout/unknown/ошибки journal
+не повторяйте write автоматически: эффект мог уже состояться. Нужен readback и
+решение в пределах действующих полномочий, не предполагаемый rollback.
+
+`setup`, `doctor` и `batch` вызываются прежним CLI-путём. Устанавливайте точный
+accepted source-built wheel в окружение consumer-а: старый `v0.1.0` release asset
+не содержит этот API, а отдельный `uv tool` interpreter не добавляет imports
+в Python-процесс агента. См. [границы установки](11-local-installation.md#6-development-and-updates).
+Пример планирования не разрешает реальную мутацию без intent владельца.
 
 ### Подготовка после установки пакета
 

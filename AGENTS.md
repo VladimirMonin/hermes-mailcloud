@@ -13,7 +13,7 @@ Confirmed project facts:
 - dependencies and commands are managed with `uv` and the committed `uv.lock`;
 - source lives in `src/hermes_mailcloud/` and tests in `tests/`;
 - schemas are under `schemas/`, while architecture and proposed contracts are under `docs/`;
-- current-source `hermes_mailcloud.application` exposes only `version`, `ls` and `stat`; other CLI operations retain their existing orchestration. See the [current application interface](docs/01-architecture.md#current-in-process-application-interface); an older release wheel does not gain it from a matching version string;
+- current-source `hermes_mailcloud.application` exposes `version`, `ls`, `stat`, `mkdir`, `upload`, `download`, `mv`, `cp`, `rm`, `publish` and `link`; these CLI handlers use that owner. `setup`, `doctor` and `batch` retain their existing CLI orchestration. See the [current application interface](docs/01-architecture.md#current-in-process-application-interface); an older release wheel does not gain it from a matching version string;
 - live cloud tests are opt-in and require explicit environment configuration.
 
 ## Commands

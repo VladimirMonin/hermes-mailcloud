@@ -1,4 +1,4 @@
-"""Synchronous, terminal-independent application operations implemented in S1."""
+"""Synchronous, terminal-independent file and public application operations."""
 
 from __future__ import annotations
 
@@ -8,15 +8,20 @@ from types import MappingProxyType
 from typing import Any
 
 from .. import __version__
+from ..commands.mkdir import MkdirCommand
+from ..commands.move_copy import MoveCopyCommands
+from ..commands.public import PublicCommands
 from ..commands.read import ReadCommands
-from ..config import resolve_profile_name
+from ..commands.remove import RemoveCommand
+from ..commands.transfer import TransferCommands
+from ..config import ResolvedConfig, resolve_profile_name
 from ..core.errors import ErrorPayload, MailCloudError, unknown_error
 from ..core.result import ResultEnvelope
 from ..output import sanitize_value
 from ..probes.core import HttpOpener
 from . import composition
-from .contracts import BackendFactory, CallOptions, ConfigLoader
-from .validation import require_bool, require_string, validate_options
+from .contracts import Backend, BackendFactory, CallOptions, ConfigLoader, Overwrite
+from .validation import require_bool, require_overwrite, require_string, validate_options
 
 
 class MailCloudApplication:
@@ -74,6 +79,191 @@ class MailCloudApplication:
         """Inspect file/directory metadata through the existing read service."""
         return self._read("stat", remote_path, options)
 
+    def mkdir(self, remote_path: str, *, options: CallOptions | None = None) -> ResultEnvelope:
+        """Create through the existing policy and one non-retried write."""
+
+        def execute(selected: CallOptions, metadata: dict[str, Any]) -> Mapping[str, Any]:
+            require_string(remote_path, "remote_path")
+            config, backend, timeout = self._compose(selected, metadata)
+            return MkdirCommand(backend, config, timeout_seconds=timeout).run(
+                remote_path,
+                dry_run=selected.dry_run,
+                yes=selected.yes,
+                retries=_write_retries(selected),
+            )
+
+        return self._invoke("mkdir", options, execute)
+
+    def upload(
+        self,
+        local_path: str,
+        remote_path: str,
+        *,
+        overwrite: Overwrite | None = None,
+        options: CallOptions | None = None,
+    ) -> ResultEnvelope:
+        """Upload privately; never create a link or retry an ambiguous write."""
+        return self._transfer("upload", local_path, remote_path, overwrite, options)
+
+    def download(
+        self,
+        remote_path: str,
+        local_path: str,
+        *,
+        overwrite: Overwrite | None = None,
+        options: CallOptions | None = None,
+    ) -> ResultEnvelope:
+        """Use the existing temporary-file/commit owner and preservation policy."""
+        return self._transfer("download", local_path, remote_path, overwrite, options)
+
+    def mv(
+        self,
+        source_path: str,
+        target_path: str,
+        *,
+        overwrite: Overwrite | None = None,
+        options: CallOptions | None = None,
+    ) -> ResultEnvelope:
+        """Move one remote object without adding rollback or retry semantics."""
+        return self._move_copy("mv", source_path, target_path, overwrite, options)
+
+    def cp(
+        self,
+        source_path: str,
+        target_path: str,
+        *,
+        overwrite: Overwrite | None = None,
+        options: CallOptions | None = None,
+    ) -> ResultEnvelope:
+        """Copy one remote object through the existing overwrite policy."""
+        return self._move_copy("cp", source_path, target_path, overwrite, options)
+
+    def rm(
+        self,
+        remote_path: str,
+        *,
+        recursive: bool = False,
+        options: CallOptions | None = None,
+    ) -> ResultEnvelope:
+        """Remove only after the existing path/confirmation/protected-root guards."""
+
+        def execute(selected: CallOptions, metadata: dict[str, Any]) -> Mapping[str, Any]:
+            require_string(remote_path, "remote_path")
+            require_bool(recursive, "recursive")
+            config, backend, timeout = self._compose(selected, metadata)
+            return RemoveCommand(backend, config, timeout_seconds=timeout).run(
+                remote_path,
+                recursive=recursive,
+                dry_run=selected.dry_run,
+                yes=selected.yes,
+                retries=_write_retries(selected),
+            )
+
+        return self._invoke("rm", options, execute)
+
+    def publish(
+        self,
+        local_path: str,
+        remote_path: str,
+        *,
+        overwrite: Overwrite | None = None,
+        options: CallOptions | None = None,
+    ) -> ResultEnvelope:
+        """Reuse public-root admission, journal preflight and post-effect error handling."""
+
+        def execute(selected: CallOptions, metadata: dict[str, Any]) -> Mapping[str, Any]:
+            require_string(local_path, "local_path")
+            require_string(remote_path, "remote_path")
+            require_overwrite(overwrite)
+            config, backend, timeout = self._compose(selected, metadata)
+            return PublicCommands(backend, config, timeout_seconds=timeout).publish(
+                local_path,
+                remote_path,
+                overwrite=overwrite,
+                dry_run=selected.dry_run,
+                yes=selected.yes,
+                retries=_write_retries(selected),
+            )
+
+        return self._invoke("publish", options, execute)
+
+    def link(self, remote_path: str, *, options: CallOptions | None = None) -> ResultEnvelope:
+        """Create/get a guarded capability and return only the safe owner result."""
+
+        def execute(selected: CallOptions, metadata: dict[str, Any]) -> Mapping[str, Any]:
+            require_string(remote_path, "remote_path")
+            config, backend, timeout = self._compose(selected, metadata)
+            return PublicCommands(backend, config, timeout_seconds=timeout).link(
+                remote_path,
+                dry_run=selected.dry_run,
+                retries=_write_retries(selected),
+            )
+
+        return self._invoke("link", options, execute)
+
+    def _transfer(
+        self,
+        operation: str,
+        local_path: str,
+        remote_path: str,
+        overwrite: Overwrite | None,
+        options: CallOptions | None,
+    ) -> ResultEnvelope:
+        def execute(selected: CallOptions, metadata: dict[str, Any]) -> Mapping[str, Any]:
+            require_string(local_path, "local_path")
+            require_string(remote_path, "remote_path")
+            require_overwrite(overwrite)
+            config, backend, timeout = self._compose(selected, metadata)
+            commands = TransferCommands(backend, config, timeout_seconds=timeout)
+            kwargs = {
+                "overwrite": overwrite,
+                "dry_run": selected.dry_run,
+                "retries": _write_retries(selected),
+            }
+            if operation == "upload":
+                return commands.upload(local_path, remote_path, **kwargs)
+            return commands.download(remote_path, local_path, **kwargs)
+
+        return self._invoke(operation, options, execute)
+
+    def _move_copy(
+        self,
+        operation: str,
+        source_path: str,
+        target_path: str,
+        overwrite: Overwrite | None,
+        options: CallOptions | None,
+    ) -> ResultEnvelope:
+        def execute(selected: CallOptions, metadata: dict[str, Any]) -> Mapping[str, Any]:
+            require_string(source_path, "source_path")
+            require_string(target_path, "target_path")
+            require_overwrite(overwrite)
+            config, backend, timeout = self._compose(selected, metadata)
+            commands = MoveCopyCommands(backend, config, timeout_seconds=timeout)
+            action = commands.move if operation == "mv" else commands.copy
+            return action(
+                source_path,
+                target_path,
+                overwrite=overwrite,
+                dry_run=selected.dry_run,
+                retries=_write_retries(selected),
+            )
+
+        return self._invoke(operation, options, execute)
+
+    def _compose(
+        self, selected: CallOptions, metadata: dict[str, Any]
+    ) -> tuple[ResolvedConfig, Backend, int]:
+        config = self._config_loader(selected.config, environment=self._environment)
+        metadata.update(profile=config.profile, remote=config.remote)
+        backend = self._backend_factory(config, environment=self._environment)
+        timeout = (
+            selected.timeout_seconds
+            if selected.timeout_seconds is not None
+            else config.timeout_seconds
+        )
+        return config, backend, timeout
+
     def _read(
         self,
         operation: str,
@@ -92,17 +282,11 @@ class MailCloudApplication:
                 ("dirs_only", dirs_only),
             ):
                 require_bool(value, name)
-            config = self._config_loader(selected.config, environment=self._environment)
-            metadata.update(profile=config.profile, remote=config.remote)
-            backend = self._backend_factory(config, environment=self._environment)
+            config, backend, timeout = self._compose(selected, metadata)
             commands = ReadCommands(
                 backend,
                 config,
-                timeout_seconds=(
-                    selected.timeout_seconds
-                    if selected.timeout_seconds is not None
-                    else config.timeout_seconds
-                ),
+                timeout_seconds=timeout,
                 retries=selected.retries if selected.retries is not None else config.retries,
             )
             if operation == "stat":
@@ -139,6 +323,11 @@ class MailCloudApplication:
         except Exception:
             # Never fall back to unsanitized data if projection itself fails.
             return ResultEnvelope.failure(operation, unknown_error())
+
+
+def _write_retries(options: CallOptions) -> int:
+    """Profile retries are read-only; the service rejects an explicit positive write budget."""
+    return options.retries if options.retries is not None else 0
 
 
 def _finalize(envelope: ResultEnvelope) -> ResultEnvelope:

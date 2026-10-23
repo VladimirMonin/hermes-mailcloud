@@ -33,11 +33,6 @@ _API_COMPONENTS = (
     "hermes_mailcloud.output",
     "hermes_mailcloud.commands.read",
     "hermes_mailcloud.rclone.runner",
-)
-_COMPONENTS = (
-    *_API_COMPONENTS,
-    "hermes_mailcloud.cli",
-    "hermes_mailcloud.batch",
     "hermes_mailcloud.commands.public",
     "hermes_mailcloud.commands.transfer",
     "hermes_mailcloud.commands.mkdir",
@@ -45,6 +40,7 @@ _COMPONENTS = (
     "hermes_mailcloud.commands.remove",
     "hermes_mailcloud.journal",
 )
+_COMPONENTS = (*_API_COMPONENTS, "hermes_mailcloud.cli", "hermes_mailcloud.batch")
 
 
 def require(condition: bool, message: str) -> None:
@@ -111,19 +107,29 @@ def installed_provenance(control: dict, *, api_only: bool = False) -> dict:
         is importlib.import_module("hermes_mailcloud.rclone.runner").RcloneRunner,
         "application runner substitution",
     )
+    for name, module in (
+        ("PublicCommands", "hermes_mailcloud.commands.public"),
+        ("TransferCommands", "hermes_mailcloud.commands.transfer"),
+        ("MkdirCommand", "hermes_mailcloud.commands.mkdir"),
+        ("MoveCopyCommands", "hermes_mailcloud.commands.move_copy"),
+        ("RemoveCommand", "hermes_mailcloud.commands.remove"),
+    ):
+        require(
+            getattr(service, name) is getattr(importlib.import_module(module), name),
+            "application write-service substitution",
+        )
+    journal = importlib.import_module("hermes_mailcloud.journal")
+    require(
+        importlib.import_module("hermes_mailcloud.commands.public").LinkJournal
+        is journal.LinkJournal,
+        "application journal substitution",
+    )
     if not api_only:
         cli = importlib.import_module("hermes_mailcloud.cli")
         require(
             cli.MailCloudApplication is service.MailCloudApplication, "CLI application substitution"
         )
-        for name, module in (
-            ("BatchCommands", "hermes_mailcloud.batch"),
-            ("PublicCommands", "hermes_mailcloud.commands.public"),
-            ("TransferCommands", "hermes_mailcloud.commands.transfer"),
-            ("MkdirCommand", "hermes_mailcloud.commands.mkdir"),
-            ("MoveCopyCommands", "hermes_mailcloud.commands.move_copy"),
-            ("RemoveCommand", "hermes_mailcloud.commands.remove"),
-        ):
+        for name, module in (("BatchCommands", "hermes_mailcloud.batch"),):
             require(
                 getattr(cli, name) is getattr(importlib.import_module(module), name),
                 "legacy CLI component substitution",
@@ -257,7 +263,7 @@ def api_run(control: dict, control_path: Path) -> None:
     # This checks the runtime boundary before its first product import and never
     # imports CLI components. Full provenance runs in a separate probe process.
     installed_provenance(control, api_only=True)
-    from hermes_mailcloud.application import MailCloudApplication, composition
+    from hermes_mailcloud.application import CallOptions, MailCloudApplication, composition
 
     composition.create_backend = lambda config, *, environment: executable_runner(
         control_path, environment=environment
@@ -272,6 +278,58 @@ def api_run(control: dict, control_path: Path) -> None:
             "refusal": application.ls("/Hermes", recursive=1),
             "failure": application.stat("/Hermes/private/api-failure"),
             "after_failure": application.ls("/Hermes"),
+        }
+        source, destination = Path(control["api_source"]), Path(control["api_destination"])
+        source.write_bytes(b"installed API source")
+        arguments = {
+            "mkdir": ("/TEST/installed-api/directory",),
+            "upload": (str(source), "/TEST/installed-api/file.txt"),
+            "download": ("/TEST/installed-api/file.txt", str(destination)),
+            "mv": ("/TEST/installed-api/file.txt", "/TEST/installed-api/moved.txt"),
+            "cp": ("/TEST/installed-api/file.txt", "/TEST/installed-api/copied.txt"),
+            "rm": ("/TEST/installed-api/file.txt",),
+            "publish": (str(source), "/Hermes/public/installed-api.txt"),
+            "link": ("/Hermes/public/installed-api.txt",),
+        }
+        for operation, args in arguments.items():
+            results[operation] = getattr(application, operation)(
+                *args, options=CallOptions(yes=True)
+            )
+        require(destination.read_bytes() == b"downloaded-wheel", "API download bytes changed")
+        journal = Path(os.environ["HMC_LINKS_JOURNAL"])
+        journal_before = journal.read_bytes()
+        for operation, args in arguments.items():
+            kwargs = {"overwrite": "always"} if operation == "download" else {}
+            results["dry-" + operation] = getattr(application, operation)(
+                *args, **kwargs, options=CallOptions(dry_run=True)
+            )
+        require(journal.read_bytes() == journal_before, "API dry-run mutated the journal")
+        require(destination.read_bytes() == b"downloaded-wheel", "API dry-run changed destination")
+        results["write-retries"] = application.mkdir(
+            "/TEST/installed-api/retry", options=CallOptions(retries=1)
+        )
+        results["protected-rm"] = application.rm("/TEST", options=CallOptions(yes=True))
+        results["write-bool"] = application.rm("/TEST/installed-api/file.txt", recursive="false")
+        results["overwrite"] = application.upload(
+            str(source), "/TEST/installed-api/file.txt", overwrite=True
+        )
+        results["confirmation"] = application.publish(*arguments["publish"])
+        results["outside-public"] = application.link("/TEST/installed-api/file.txt")
+        records = [json.loads(line) for line in journal_before.decode("utf-8").splitlines()]
+        require(
+            [row["operation"] for row in records] == ["publish", "link"],
+            "API journal order changed",
+        )
+        require(
+            all(row["public_url"] == PUBLIC_URL for row in records),
+            "API journal capability mismatch",
+        )
+        resources = {
+            "download_bytes": destination.stat().st_size,
+            "download_sha256": hashlib.sha256(destination.read_bytes()).hexdigest(),
+            "source_preserved": source.read_bytes() == b"installed API source",
+            "journal_operations": [row["operation"] for row in records],
+            "dry_run_journal_unchanged": journal.read_bytes() == journal_before,
         }
     require(not output.getvalue() and not diagnostics.getvalue(), "direct API wrote output")
     require(
@@ -295,6 +353,7 @@ def api_run(control: dict, control_path: Path) -> None:
                 "provenance": provenance,
                 "cli_sdk_imported": False,
                 "application_output": False,
+                "resources": resources,
             }
         )
     )

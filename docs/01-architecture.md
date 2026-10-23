@@ -11,23 +11,24 @@ immutable release wheel `v0.1.0`. Одинаковое значение верс
 [`application/contracts.py`](../src/hermes_mailcloud/application/contracts.py),
 не отдельная HTTP/JSON-схема или реестр команд.
 
-Поддерживаемый вход `hermes_mailcloud.application` предоставляет
-`MailCloudApplication.version`, `ls` и `stat`. Это синхронные вызовы в процессе
-потребителя; HTTP-сервера, GUI/MCP, общей живой сессии или фоновых jobs нет.
-Текущие CLI handlers этих трёх команд только переводят аргументы, вызывают этот
-API, выводят envelope и применяют exit code:
+Поддерживаемый вход `hermes_mailcloud.application` предоставляет одиннадцать методов
+`MailCloudApplication`: `version`, `ls`, `stat`, `mkdir`, `upload`, `download`,
+`mv`, `cp`, `rm`, `publish`, `link`. Это синхронные вызовы в процессе потребителя;
+HTTP-сервера, GUI/MCP, общей живой сессии или фоновых jobs нет. CLI handlers этих
+команд только переводят аргументы, вызывают API, выводят envelope и применяют exit:
 
 ```text
-Python consumer ───────┐
-CLI version/ls/stat ───┴→ MailCloudApplication
-                          → config/composition → ReadCommands → runner/parser
-                          → safe ResultEnvelope → consumer/output adapter
+Python consumer ──────────────┐
+CLI version/read/file/public ─┴→ MailCloudApplication → config/composition
+                                → existing commands + policy/journal + runner/parser
+                                → safe ResultEnvelope → consumer/output adapter
 ```
 
-Стрелки обозначают вызов и передачу результата. Остальные поставляемые CLI-команды
-сохраняют прежнюю оркестрацию в `cli.py`; это не альтернативный fallback для трёх
-перенесённых методов. Внутренние command services не объявляются вторым публичным
-SDK. Полный переход остаётся в [предлагаемом плане](plans/command-first-refactor.md).
+Стрелки обозначают вызов и передачу результата, не линейную цепочку imports.
+`setup`, `doctor` и `batch` пока сохраняют прежнюю CLI-оркестрацию; Python-методов
+`setup`, `doctor`, `batch`, `batch_file` нет. Для перенесённых команд legacy fallback
+не остаётся. Внутренние command services не объявляются вторым публичным SDK.
+Оставшийся переход — в [предлагаемом плане](plans/command-first-refactor.md).
 
 Пример для Python-окружения с этим source-built пакетом и выбранным подключением:
 
@@ -40,7 +41,31 @@ response = application.ls(
 )
 payload = response.to_payload()
 exit_code = response.exit_code
+planned = application.mkdir(
+    "/TEST/example-plan", options=CallOptions(dry_run=True)
+)
 ```
+
+File/public методы вызывают существующих owners, а не воспроизводят их алгоритмы:
+
+| Методы | Сценарий и сохранённая граница |
+|---|---|
+| `mkdir` | Нормализованный remote path, один write либо meaningful dry-run plan |
+| `upload`, `download` | Local/remote paths и `overwrite`; upload не создаёт ссылку, download использует sibling temp и существующий commit/no-clobber owner |
+| `mv`, `cp` | Два разных нормализованных remote paths и прежняя overwrite policy |
+| `rm` | Genuine boolean `recursive`, обязательный `yes` для реального удаления и неизменённые protected roots |
+| `publish`, `link` | Фиксированный public root/deny patterns, native private-journal preflight перед cloud, запись после link, наружу только fingerprint |
+
+Standalone `link` не требует `yes`; реальный `publish` требует. Подтверждение в
+`CallOptions` выражает намерение текущего процесса, не аутентифицирует внешний
+запрос. Dry-run всех восьми file/public writes даёт план без backend invocation,
+download temp и journal prepare/record; policy, overwrite и реальный local source
+всё равно валидируются. `never` сохраняет существующий/конкурентный download target;
+`if-newer` использует наблюдаемые timestamps. Ни batch transaction, ни rollback после
+timeout не обещаны. Ошибка записи journal после link может следовать уже состоявшемуся
+cloud-эффекту: нет retry, unlink или автоматического rollback. Подробности —
+[модель безопасности](05-safety-model.md) и
+[ошибка после public operation](08-configuration-and-secrets.md#failure-after-a-public-operation).
 
 API сам ничего не печатает и не требует Typer/Click/Rich. Он возвращает существующий
 `ResultEnvelope`: `operation`, result либо typed error, прежний exit code и
@@ -50,8 +75,8 @@ exception content и обещания отсутствия эффекта. Ош�
 keyword остаётся `TypeError`; `BaseException` не превращается в успех.
 
 Конструктор только копирует environment и сохраняет доверенные зависимости.
-`version` не читает config и не создаёт backend. На каждом read-вызове config и
-runner собираются заново; изменения файла настроек видны следующему вызову,
+`version` не читает config и не создаёт backend. На каждом read/file/public-вызове
+config и runner собираются заново; изменения файла настроек видны следующему вызову,
 изменения environment — новому экземпляру. Последний результат/runner не кешируются.
 DI — seam доверенного хоста, не sandbox; `Path.home()`/`expanduser()` могут учитывать
 process home, поэтому передача environment не заменяет раннюю изоляцию теста.
@@ -60,17 +85,20 @@ process home, поэтому передача environment не заменяет 
 `yes=False`, `timeout_seconds=None` и `retries=None`. `None` означает отсутствие
 runtime override, а `retries=0` — явный нулевой бюджет. Нужны настоящие boolean и
 целые timeout/retries без bool/float/строк; неверные типы отклоняются до config.
-Типы путей операции — строки; нормализация, policy, parser и безопасные read retries
+Типы путей операции — строки; `overwrite` — `None`, `never`, `always` или `if-newer`,
+без неявного coercion. Нормализация, policy, parser и безопасные read retries
 остаются у существующих owners. `ls` принимает `recursive`, `files_only`,
 `dirs_only`; file/directory `stat` сохраняет доступные metadata/hashes.
-`dry_run=True` не отменяет standalone read-вызов backend.
+`dry_run=True` не отменяет standalone read-вызов backend. Для writes profile read
+retries не наследуются: default равен нулю; explicit positive budget отклоняется
+даже для dry-run. Timeout относится к одному backend invocation, не ко всему publish.
 
 `ConfigOverrides` — нейтральное имя прежних profile/remote/config_path overrides;
 `CliConfigOverrides` остаётся совместимым alias. Precedence и отдельный
 `RCLONE_CONFIG` описаны в [конфигурации](08-configuration-and-secrets.md#5-приоритет-настроек-).
 Повторная безопасная проекция идемпотентна; маркер redaction не даёт права пропустить
 секрет рядом с ним. Schemas, publication/confirmation/journal и write-once правила
-не расширены новой read-границей.
+не расширены новой application-границей.
 
 ## Historical architecture proposals
 
