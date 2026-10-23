@@ -31,7 +31,11 @@ unqualified. This establishes neither an Administrator requirement nor universal
 platform support. POSIX and native Windows storage/process backends are retained.
 Earlier explicit setup/default official HTTPS and local-file rclone checks apply
 to unchanged installer behavior, not fresh 0.2.0 network qualification. Fake-backed
-checks do not prove Mail.ru access. See the [Windows boundaries and limits](docs/11-local-installation.md#windows-configuration).
+checks do not prove Mail.ru access. Separate operational installed verification
+covers real Mail.ru file operations and both batch inputs, full-byte/SHA-256
+readback and exact owned cleanup; it does not qualify production-public operations.
+See the [installed boundary](docs/11-local-installation.md#installed-020-verification)
+and [Windows limits](docs/11-local-installation.md#windows-configuration).
 
 ## Quick start (development)
 

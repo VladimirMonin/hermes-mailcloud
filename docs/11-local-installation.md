@@ -314,6 +314,25 @@ Only after successful account configuration/access should `config_loaded`,
 true. Read-only doctor does not configure or mutate the cloud. See
 [configuration and secrets](08-configuration-and-secrets.md).
 
+### Installed 0.2.0 verification
+
+The non-editable operational uv tool, its real registered launcher and direct
+Application API have been checked outside the checkout with the existing selected
+Mail.ru connection. The file-operation boundary includes owned-directory creation,
+upload/list/stat/download, copy and Unicode rename, plus direct-document and
+installed CLI file batches. Complete downloaded bytes and SHA-256 were compared;
+only pre-registered same-run objects in a freshly absent `/TEST/` descendant were
+removed, followed by API/CLI absence readback. This is real cloud file verification,
+not a fake-backed or read-only-only substitute. It does not establish production
+publication, public-link HTTP behavior or full live-doctor qualification.
+
+The installed boundary used native Windows x64/Python 3.12 with elevation, not
+ordinary-user Windows. Explicit setup retained the already available working
+rclone; this was not a fresh default HTTPS download. Package replacement preserves
+application settings, the private journal and external backend; rclone remains
+the owner of its own authentication store. No credential bodies are copied into
+the application package or required in chat.
+
 ### Verified installed boundary retained from alpha
 
 Earlier installed-alpha checks exercised a per-user uv tool from a Windows agent
